@@ -1,0 +1,272 @@
+.web-sample-page {
+  min-height: 100vh;
+  padding: 24px;
+  color: #1B262C;
+  background: #F8F7F4;
+}
+
+.web-sample-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  max-width: 1580px;
+  margin: 0 auto 18px;
+}
+
+.web-sample-header span {
+  color: #10367D;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.web-sample-header h1 {
+  margin: 4px 0 0;
+  color: #1B262C;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.web-sample-header p {
+  margin: 7px 0 0;
+  max-width: 620px;
+  color: #0F4C75;
+  font-size: 14px;
+}
+
+.web-sample-header a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 13px;
+  color: #10367D;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.web-sample-workspace {
+  display: grid;
+  grid-template-columns: minmax(720px, 1180px) minmax(300px, 360px);
+  justify-content: center;
+  gap: 22px;
+  max-width: 1580px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.web-preview-stage {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d9dde3;
+  border-radius: 8px;
+  background: #202124;
+  box-shadow: 0 22px 60px rgb(27 38 44 / 14%);
+}
+
+.web-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  color: #F8F7F4;
+  font-size: 12px;
+}
+
+.web-preview-toolbar span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #d9dde3;
+}
+
+.web-preview-toolbar strong {
+  margin-left: 4px;
+  color: #d9dde3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.web-preview-screen {
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  min-height: 640px;
+  max-height: calc(100vh - 150px);
+  overflow: auto;
+  background: #F8F7F4;
+}
+
+.web-preview-screen .survey-shell {
+  min-height: 100%;
+}
+
+.web-preview-screen .survey-preview-panel {
+  display: none;
+}
+
+.web-preview-screen .survey-mode-link {
+  display: none;
+}
+
+.web-export-panel {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.web-export-panel span {
+  color: #10367D;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.web-export-panel h2 {
+  margin: 4px 0 0;
+  color: #1B262C;
+  font-size: 18px;
+}
+
+.web-export-panel p {
+  margin: 6px 0 0;
+  color: #0F4C75;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.web-export-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 12px;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #F8F7F4;
+}
+
+.web-export-card.pii {
+  border-color: #BBE1FA;
+  background: #F8F7F4;
+}
+
+.web-export-card strong {
+  color: #1B262C;
+  font-size: 13px;
+}
+
+.web-export-card em {
+  color: #0047AB;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.web-export-card p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+}
+
+.web-export-preview {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #F8F7F4;
+}
+
+.web-export-preview > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.web-export-preview strong {
+  color: #1B262C;
+  font-size: 13px;
+}
+
+.web-export-preview em,
+.web-export-preview span {
+  color: #0047AB;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.web-export-preview pre {
+  max-height: 190px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  color: #1B262C;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.web-export-notes {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #F8F7F4;
+}
+
+.web-export-notes strong {
+  color: #1B262C;
+  font-size: 13px;
+}
+
+.web-export-notes ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #0F4C75;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .web-sample-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .web-export-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .web-sample-page {
+    padding: 14px;
+  }
+
+  .web-sample-header {
+    display: grid;
+    align-items: start;
+  }
+
+  .web-preview-screen {
+    min-height: 620px;
+    max-height: none;
+  }
+}
