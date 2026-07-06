@@ -8,7 +8,7 @@ import { WebSurveySample } from "./survey/WebSurveySample";
 function SurveyApp() {
   const path = window.location.pathname;
 
-  if (path.startsWith("/survey-mobile")) {
+  if (path.startsWith("/mockup")) {
     return <MobileSurveySample />;
   }
 

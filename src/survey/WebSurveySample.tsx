@@ -23,7 +23,7 @@ export function WebSurveySample() {
           <h1>데스크톱 비율 설문 화면</h1>
           <p>웹 조사 환경에서 폼 화면과 운영 확인 영역을 분리해 검토합니다.</p>
         </div>
-        <a href="/survey-mobile">모바일 웹 보기</a>
+        <a href="/mockup">목업 보기</a>
       </header>
 
       <section className="web-sample-workspace">

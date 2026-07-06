@@ -37,6 +37,7 @@ export type SurveyExportSnapshot = {
 
 type SurveyPrototypeProps = {
   onExportSnapshotChange?: (snapshot: SurveyExportSnapshot) => void;
+  showModeLink?: boolean;
 };
 
 const initialAnswers = Object.fromEntries(
@@ -61,7 +62,7 @@ const surveyQuestions = reorderUsageFrequencyQuestions([
 const submittedPhoneStorageKey = "libanalysis-survey-submitted-phones";
 const samplePhoneValue = "01012345678";
 
-export function SurveyPrototype({ onExportSnapshotChange }: SurveyPrototypeProps = {}) {
+export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }: SurveyPrototypeProps = {}) {
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [answers, setAnswers] = React.useState<Record<string, SurveyValue>>(initialAnswers);
   const [progressExpanded, setProgressExpanded] = React.useState(false);
@@ -165,7 +166,7 @@ export function SurveyPrototype({ onExportSnapshotChange }: SurveyPrototypeProps
           <h1>2026 공공도서관 서비스 성과조사</h1>
           {/* <p>모바일과 웹에서 문항 유형에 맞는 입력 방식을 검토하는 화면입니다.</p> */}
         </div>
-        <a className="survey-mode-link" href="/survey-mobile">모바일 웹 보기</a>
+        {showModeLink && <a className="survey-mode-link" href="/mockup">목업 보기</a>}
       </section>
 
       <section className={`survey-layout ${showDebugExport ? "" : "no-preview"} ${question.section === "pii" ? "contact-only" : ""}`}>

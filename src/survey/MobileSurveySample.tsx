@@ -23,7 +23,7 @@ export function MobileSurveySample() {
           <h1>390 x 844 기준 설문 화면</h1>
           <p>실제 모바일 화면 폭에서 문항, 진행률, 선택 UI, export 미리보기가 어떻게 보이는지 확인합니다.</p>
         </div>
-        <a href="/survey">전체 화면으로 보기</a>
+        <a href="/survey">실제 설문 보기</a>
       </header>
 
       <section className="mobile-sample-workspace">
