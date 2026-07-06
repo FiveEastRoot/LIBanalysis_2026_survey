@@ -67,6 +67,7 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
   const [answers, setAnswers] = React.useState<Record<string, SurveyValue>>(initialAnswers);
   const [progressExpanded, setProgressExpanded] = React.useState(false);
   const [submitMessage, setSubmitMessage] = React.useState("");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const question = surveyQuestions[currentIndex];
   const analysisPayload = React.useMemo(() => buildAnalysisPayload(answers), [answers]);
   const piiPayload = React.useMemo(() => buildPiiPayload(answers), [answers]);
@@ -126,10 +127,15 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
     setCurrentIndex((index) => previousVisibleQuestionIndex(index, answers));
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const phone = normalizedPhone(answers["P2-EXCLUDE"]);
     if (!isValidPhone(answers["P2-EXCLUDE"])) {
       setSubmitMessage(isSamplePhone(answers["P2-EXCLUDE"]) ? "예시 번호는 사용할 수 없습니다. 실제 휴대폰 번호를 입력해 주세요." : "휴대폰 번호는 숫자 11자리로 입력해 주세요.");
+      setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
+      return;
+    }
+    if (String(answers["P1-EXCLUDE"] ?? "") !== "취급위탁에 동의") {
+      setSubmitMessage("개인정보 취급위탁에 동의해야 제출할 수 있습니다.");
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
     }
@@ -138,8 +144,31 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
     }
-    saveSubmittedPhone(phone);
-    setSubmitMessage("제출 완료 처리되었습니다. 같은 휴대폰 번호로는 다시 제출할 수 없습니다.");
+    setIsSubmitting(true);
+    setSubmitMessage("제출 중입니다. 잠시만 기다려 주세요.");
+    try {
+      const response = await submitSurveyResponse({
+        analysisPayload,
+        piiPayload,
+        completedFields: exportCompletion.completedFields,
+        totalFields: exportCompletion.totalFields,
+      });
+      if (!response.ok) {
+        if (response.duplicate) {
+          setSubmitMessage("이미 제출이 완료된 휴대폰 번호입니다. 같은 번호로는 다시 제출할 수 없습니다.");
+          setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
+          return;
+        }
+        setSubmitMessage(response.message || "제출 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      saveSubmittedPhone(phone);
+      setSubmitMessage("제출이 완료되었습니다. 같은 휴대폰 번호로는 다시 제출할 수 없습니다.");
+    } catch {
+      setSubmitMessage("네트워크 오류로 제출하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function handleQuestionKeyDown(event: React.KeyboardEvent<HTMLElement>) {
@@ -261,8 +290,8 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
               </button>
             )}
             {currentIndex === surveyQuestions.length - 1 ? (
-              <button className="survey-primary-button" type="button" onClick={handleSubmit}>
-                제출
+              <button className="survey-primary-button" type="button" onClick={handleSubmit} disabled={isSubmitting}>
+                {isSubmitting ? "제출 중" : "제출"}
                 <Check size={18} />
               </button>
             ) : (
@@ -826,6 +855,39 @@ function PayloadPreview({ title, payload, tone }: { title: string; payload: Reco
       <pre>{JSON.stringify(payload, null, 2)}</pre>
     </div>
   );
+}
+
+type SubmitSurveyRequest = {
+  analysisPayload: Record<string, unknown>;
+  piiPayload: Record<string, unknown>;
+  completedFields: number;
+  totalFields: number;
+};
+
+type SubmitSurveyResult = {
+  ok: boolean;
+  duplicate?: boolean;
+  message?: string;
+};
+
+async function submitSurveyResponse(payload: SubmitSurveyRequest): Promise<SubmitSurveyResult> {
+  const response = await fetch("/api/submit-survey", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...payload,
+      submittedAt: new Date().toISOString(),
+      clientPath: window.location.pathname,
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  return {
+    ok: response.ok && result.ok !== false,
+    duplicate: Boolean(result.duplicate),
+    message: typeof result.message === "string" ? result.message : "",
+  };
 }
 
 function buildAnalysisPayload(answers: Record<string, SurveyValue>) {
