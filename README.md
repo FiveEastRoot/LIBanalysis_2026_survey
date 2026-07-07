@@ -18,6 +18,13 @@
 
 응답 제출은 브라우저에서 Google Sheets로 직접 보내지 않고, 같은 도메인의 Netlify Function `/api/submit-survey`를 거쳐 저장합니다.
 
+현재 운영 연결값:
+
+- Google Sheet: `1vIzG0PwrPzUUBYfKIGkJHeWIKNzM-8munnUsZX7jKzs`
+- Apps Script 배포 ID: `AKfycbxqcnhtxX72mHQXLia6No8j5gqsfRtMoWGLa2ENi134kQN5rJf0X9xLrljsqSyohq18`
+- Apps Script Web App: `https://script.google.com/macros/s/AKfycbxqcnhtxX72mHQXLia6No8j5gqsfRtMoWGLa2ENi134kQN5rJf0X9xLrljsqSyohq18/exec`
+- Apps Script 라이브러리: `https://script.google.com/macros/library/d/1hGkiLzLAQSXY4E2dOFiucYk5EsN1N6Negs4SWtCK4Cj0hMAzXiPpjn2R/2`
+
 보안 구조:
 
 - 브라우저에는 Google Apps Script URL과 비밀키를 노출하지 않습니다.
