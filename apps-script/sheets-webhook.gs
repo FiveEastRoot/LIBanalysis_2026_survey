@@ -106,6 +106,7 @@ function getHeaders(sheet) {
 function appendPayloadRow(sheet, headers, payload) {
   const row = headers.map(function (header) {
     const value = payload[header];
+    if (header === "P2-EXCLUDE") return value == null || value === "" ? "" : "'" + String(value);
     if (Array.isArray(value)) return value.join("|");
     if (value && typeof value === "object") return JSON.stringify(value);
     return value == null ? "" : value;
