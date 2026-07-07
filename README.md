@@ -29,7 +29,7 @@
 
 설정 순서:
 
-1. Google Sheet `1jSeFRF3S8YJqjeX3d0Qf6J-K584SrytKdjk07t55NSI`에서 Apps Script를 엽니다.
+1. Google Sheet `1vIzG0PwrPzUUBYfKIGkJHeWIKNzM-8munnUsZX7jKzs`에서 Apps Script를 엽니다.
 2. `apps-script/sheets-webhook.gs` 내용을 붙여 넣습니다.
 3. Apps Script 프로젝트 속성에 `SHEETS_WEBHOOK_SECRET`을 긴 랜덤 문자열로 저장합니다.
 4. Apps Script를 Web App으로 배포합니다.
