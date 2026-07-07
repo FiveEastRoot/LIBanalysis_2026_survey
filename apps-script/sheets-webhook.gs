@@ -3,6 +3,24 @@ const ANALYSIS_SHEET_NAME = "Analysis Export";
 const PII_SHEET_NAME = "PII";
 const LOG_SHEET_NAME = "Submission Log";
 const SECRET_PROPERTY_KEY = "SHEETS_WEBHOOK_SECRET";
+const ALLOWED_ANALYSIS_HEADERS = [
+  "SQ1", "SQ2", "SQ3", "SQ3-DONG", "SQ4", "SQ5", "BQ1", "BQ2",
+  "Q1-A-1", "Q1-A-2", "Q1-A-3", "Q1-A-4", "Q1-A-5", "Q1-A-6",
+  "Q1-B-1", "Q1-B-2", "Q1-B-3", "Q1-B-4", "Q1-B-5", "Q1-B-6", "Q1-B-7", "Q1-C",
+  "Q2-A-1", "Q2-A-2", "Q2-A-3", "Q2-A-4", "Q2-A-5", "Q2-A-6", "Q2-A-7",
+  "Q2-B-1", "Q2-B-2", "Q2-B-3", "Q2-B-4", "Q2-B-5", "Q2-B-6", "Q2-C",
+  "Q3-A-1", "Q3-A-2", "Q3-A-3", "Q3-A-4", "Q3-A-5", "Q3-A-6",
+  "Q3-B-1", "Q3-B-2", "Q3-B-3", "Q3-B-4", "Q3-B-5", "Q3-C",
+  "Q4-A-1", "Q4-A-2", "Q4-A-3", "Q4-A-4", "Q4-A-5", "Q4-A-6",
+  "Q4-B-1", "Q4-B-2", "Q4-B-3", "Q4-C",
+  "Q5-A-1", "Q5-A-2", "Q5-A-3", "Q5-B-1", "Q5-B-2", "Q5-B-3", "Q5-B-4", "Q5-B-5", "Q5-B-6", "Q5-C",
+  "Q6-B-1", "Q6-B-2", "Q6-B-3", "Q6-B-4", "Q6-B-5", "Q6-B-6", "Q6-B-7", "Q6-B-8", "Q6-B-9", "Q6-C",
+  "Q7-D-12", "Q8",
+  "DQ1-Y", "DQ1-M", "DQ2-Y", "DQ2-M", "DQ3", "DQ4", "DQ5-1", "DQ5-2", "DQ5-3", "DQ6-Y", "DQ6-M", "DQ6-1",
+  "DQ7-E-1", "DQ7-E-2", "DQ7-E-3", "DQ7-E-4", "DQ7-E-5", "DQ7-E-6", "DQ7-E-7", "DQ7-E-8",
+  "RQ1-1", "RQ1-2", "RQ1-3", "RQ1-4", "RQ1-5", "RQ1-6", "RQ1-7", "RQ2", "RQ3-1", "RQ3-2", "RQ3-3",
+];
+const ALLOWED_PII_HEADERS = ["P1-EXCLUDE", "P2-EXCLUDE"];
 
 function doPost(e) {
   try {
@@ -28,9 +46,10 @@ function doPost(e) {
       return jsonResponse({ ok: false, duplicate: true, message: "Duplicate phone" }, 409);
     }
 
-    const analysisPayload = body.analysisPayload || {};
+    const analysisPayload = filterAllowedPayload(body.analysisPayload || {}, ALLOWED_ANALYSIS_HEADERS);
+    const filteredPiiPayload = filterAllowedPayload(piiPayload, ALLOWED_PII_HEADERS);
     const analysisHeaders = ensurePayloadHeaders(analysisSheet, ["requestId", "receivedAt", "submittedAt"], analysisPayload);
-    const piiHeaders = ensurePayloadHeaders(piiSheet, ["requestId", "receivedAt", "submittedAt"], piiPayload);
+    const piiHeaders = ensurePayloadHeaders(piiSheet, ["requestId", "receivedAt", "submittedAt"], filteredPiiPayload);
     ensureHeaders(logSheet, ["requestId", "receivedAt", "submittedAt", "completedFields", "totalFields", "clientPath", "userAgent"]);
 
     appendPayloadRow(analysisSheet, analysisHeaders, {
@@ -44,7 +63,7 @@ function doPost(e) {
       requestId: body.requestId,
       receivedAt: body.receivedAt,
       submittedAt: body.submittedAt,
-      ...piiPayload,
+      ...filteredPiiPayload,
       "P2-EXCLUDE": phone,
     });
 
@@ -77,6 +96,16 @@ function ensurePayloadHeaders(sheet, baseHeaders, payload) {
     sheet.getRange(1, existingHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
   }
   return getHeaders(sheet);
+}
+
+function filterAllowedPayload(payload, allowedHeaders) {
+  const filtered = {};
+  allowedHeaders.forEach(function (header) {
+    if (Object.prototype.hasOwnProperty.call(payload, header)) {
+      filtered[header] = payload[header];
+    }
+  });
+  return filtered;
 }
 
 function ensureHeaders(sheet, requiredHeaders) {
