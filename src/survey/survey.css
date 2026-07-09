@@ -417,6 +417,7 @@
 .survey-input-label textarea,
 .survey-input-label select,
 .rank-select-row select {
+  box-sizing: border-box;
   width: 100%;
   min-height: 52px;
   padding: 0 13px;
@@ -532,8 +533,12 @@
 
 .period-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+}
+
+.period-grid .survey-input-label {
+  min-width: 0;
 }
 
 .district-dong-stack {
