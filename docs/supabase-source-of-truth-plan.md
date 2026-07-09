@@ -23,10 +23,11 @@ Survey form
 
 | Role | Purpose | Allowed actions |
 | --- | --- | --- |
-| 일반 직원 | 조사 현황 확인, 기본 모니터링 | 대시보드 조회 중심 |
-| 관리자 | 조사 운영, 백업, export, 개인정보 분리 파일 관리 | 데이터 다운로드, Google Sheets 백업, 운영 로그 확인 |
+| 일반 직원 | 소속 도서관 조사 현황 확인 및 원자료 저장 | 소속 도서관 데이터만 조회/저장/다운로드 |
+| 자치구 관리자 | 자치구 단위 조사 운영, 직원 계정 관리, 백업/export | 해당 자치구 통합 데이터 다운로드, Google Sheets 백업, 일반 직원 계정 생성 |
+| 시스템 전체 관리자 | 전체 자치구 운영 관리 | 전체 데이터 다운로드/백업, 자치구 관리자 계정 및 기준정보 관리 |
 
-데이터 다운로드 기능은 관리자 뷰에서만 제공합니다. 일반 직원 뷰에서는 분석 화면 또는 집계 화면만 제공하고 원자료 다운로드는 제공하지 않습니다.
+일반 직원도 원자료 저장/다운로드가 가능하지만, 범위는 해당 직원이 소속된 도서관 데이터로 제한합니다. 자치구 관리자는 해당 자치구 데이터를 통합으로 다운로드할 수 있고, 시스템 전체 관리자는 전체 자치구 데이터를 관리합니다.
 
 ## Storage Principle
 
@@ -35,7 +36,7 @@ Survey form
 - DB에는 `phone_hash`, `phone_encrypted`, `phone_encryption_version`만 저장합니다.
 - 중복 응답 방지는 `phone_hash` unique constraint로 처리합니다.
 - 분석용 데이터와 개인정보성 운영 데이터는 분리 저장합니다.
-- 대시보드 로그인/권한 정보는 별도 테이블로 관리합니다.
+- 대시보드 로그인/권한 정보에는 역할, 소속 자치구, 소속 도서관을 저장합니다.
 
 ## Proposed Tables
 
@@ -99,10 +100,38 @@ Survey form
 | `id` | UUID primary key |
 | `auth_user_id` | Supabase Auth user id 또는 외부 로그인 식별자 |
 | `email` | 운영자 이메일 |
-| `role` | `staff` 또는 `admin` |
+| `role` | `staff`, `district_admin`, `system_admin` |
+| `district_id` | 소속 자치구. 일반 직원/자치구 관리자에게 필요 |
+| `library_id` | 소속 도서관. 일반 직원에게 필요 |
+| `created_by` | 계정을 생성한 관리자 |
 | `is_active` | 사용 여부 |
 | `created_at` | 생성 시각 |
 | `updated_at` | 수정 시각 |
+
+자치구별 자치구 관리자 계정은 1개를 기본 원칙으로 합니다. 자치구 관리자는 일반 직원 계정을 생성하면서 어느 자치구의 어느 도서관 소속인지 지정합니다.
+
+### `districts`
+
+자치구 기준정보입니다.
+
+| Column | Notes |
+| --- | --- |
+| `id` | UUID primary key |
+| `name` | 자치구명 |
+| `code` | 자치구 코드 |
+| `is_active` | 사용 여부 |
+
+### `libraries`
+
+도서관 기준정보입니다.
+
+| Column | Notes |
+| --- | --- |
+| `id` | UUID primary key |
+| `district_id` | 소속 자치구 |
+| `name` | 도서관명 |
+| `code` | 도서관 코드 |
+| `is_active` | 사용 여부 |
 
 ### `admin_export_log`
 
@@ -123,10 +152,13 @@ Survey form
 | Action | Result | Role |
 | --- | --- | --- |
 | 백업 | Supabase 데이터를 Google Sheets로 내보냄 | 관리자 |
-| Analysis CSV export | 분석용 응답만 CSV 다운로드 | 관리자 |
-| PII CSV export | 암호화 전화번호/동의 정보만 CSV 다운로드 | 관리자 |
-| Combined 운영 export | 필요한 경우 request_id 기준으로 결합한 운영용 파일 다운로드 | 관리자 |
-| 대시보드 조회 | 집계/현황 화면 조회 | 일반 직원, 관리자 |
+| 도서관 범위 원자료 저장/다운로드 | 소속 도서관 데이터만 다운로드 | 일반 직원 |
+| 자치구 Analysis CSV export | 해당 자치구 분석용 응답만 CSV 다운로드 | 자치구 관리자 |
+| 자치구 PII CSV export | 해당 자치구 암호화 전화번호/동의 정보만 CSV 다운로드 | 자치구 관리자 |
+| 전체 Analysis/PII export | 전체 자치구 파일 다운로드 | 시스템 전체 관리자 |
+| 일반 직원 계정 생성 | 직원의 자치구/도서관 소속 지정 | 자치구 관리자 |
+| 자치구 관리자 계정 관리 | 자치구별 관리자 계정 관리 | 시스템 전체 관리자 |
+| 대시보드 조회 | 권한 범위별 집계/현황 화면 조회 | 일반 직원, 자치구 관리자, 시스템 전체 관리자 |
 
 ## Export Separation
 
@@ -141,7 +173,7 @@ CSV export는 최소 2가지로 분리합니다.
 
 ## Google Sheets Backup
 
-관리자 페이지에서 `백업`을 누르면 Supabase 데이터를 Google Sheets로 내보냅니다.
+자치구 관리자 또는 시스템 전체 관리자 페이지에서 `백업`을 누르면 권한 범위에 맞는 Supabase 데이터를 Google Sheets로 내보냅니다.
 
 백업 시트 구조는 현재와 동일하게 유지합니다.
 
@@ -155,10 +187,11 @@ Google Sheets는 운영 편의용 백업/확인 수단이며 원천 데이터는
 
 대시보드는 Supabase에서 직접 읽는 구조를 우선합니다.
 
-- 일반 직원 뷰: 집계/현황 중심, 다운로드 없음
-- 관리자 뷰: 백업, CSV export, 운영 로그 조회
+- 일반 직원 뷰: 소속 도서관 집계/현황, 분석 전 홈 화면에서 해당 도서관 원자료 저장/다운로드
+- 자치구 관리자 뷰: 설정 페이지 표시, 일반 직원 계정 생성, 자치구 통합 백업/export, 운영 로그 조회
+- 시스템 전체 관리자 뷰: 설정 페이지 표시, 자치구 관리자 계정 관리, 기준정보 관리, 전체 백업/export
 - 분석용 대시보드는 `survey_analysis_export` 또는 분석용 view를 기준으로 구성
-- PII 관련 테이블은 관리자 기능에서만 접근
+- PII 관련 export는 자치구 관리자/시스템 전체 관리자 기능에서만 접근
 
 ## Security Notes
 
@@ -168,7 +201,9 @@ Google Sheets는 운영 편의용 백업/확인 수단이며 원천 데이터는
 - 원문 전화번호는 Netlify Function에서만 일시 처리합니다.
 - DB에는 암호화/해시 처리된 전화번호만 저장합니다.
 - 관리자 다운로드와 백업은 `admin_export_log`에 기록합니다.
-- 대시보드에서 일반 직원과 관리자 역할을 분리합니다.
+- 대시보드에서 일반 직원, 자치구 관리자, 시스템 전체 관리자 역할을 분리합니다.
+- 일반 직원 다운로드는 소속 도서관 범위로 제한합니다.
+- 자치구 관리자 다운로드는 해당 자치구 범위로 제한합니다.
 
 ## Migration Notes
 
@@ -177,4 +212,3 @@ Google Sheets는 운영 편의용 백업/확인 수단이며 원천 데이터는
 3. `phone_hash` unique constraint로 중복 응답을 차단합니다.
 4. 관리자 대시보드에서 Google Sheets 백업과 CSV export를 구현합니다.
 5. 분석 대시보드는 Supabase 분석용 view 또는 Analysis CSV 구조에 맞춰 개편합니다.
-
