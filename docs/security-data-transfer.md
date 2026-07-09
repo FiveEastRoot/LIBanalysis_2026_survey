@@ -25,7 +25,7 @@ Supabase
 - Submit API: `https://libanalysis-2026-survey.netlify.app/api/submit-survey`
 - Supabase project: `libanalysis-v2-survey`
 - Supabase ref: `xerxcdneuvfoioiwhsxj`
-- Supabase URL: `https://xerxcdneuvfoioiwhsxj.supabase.co`
+- Supabase connection values are stored in Netlify production environment variables.
 
 ## Security Controls
 
