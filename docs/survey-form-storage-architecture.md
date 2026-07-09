@@ -353,6 +353,7 @@ flowchart TD
 ## 로컬 관련 문서
 
 - `docs/supabase-source-of-truth-plan.md`
+- `docs/supabase-migration-draft.md`
 - `docs/phone-encryption-operations.md`
 - `docs/security-data-transfer.md`
 - `docs/form-revision-worklist.md`
