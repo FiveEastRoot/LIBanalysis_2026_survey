@@ -31,16 +31,30 @@
 
 ## Verification Commands
 
-Docker Desktop이 실행 중인 상태에서 다음 순서로 검증합니다.
+Docker Desktop이 실행 중인 상태에서 다음 순서로 검증했습니다.
 
 ```powershell
 npx supabase db start
 npx supabase db reset
 npx supabase migration list --local
 npx supabase db lint
+npx supabase db advisors
 ```
 
-현재 작업 환경에서는 Docker CLI는 있으나 Docker Desktop daemon이 실행 중이 아니어서 로컬 DB 적용 검증은 수행하지 못했습니다.
+## Verification Result
+
+| Check | Result |
+| --- | --- |
+| `npx supabase db reset` | Passed |
+| `npx supabase migration list --local` | Local and remote local-dev migration versions matched |
+| `npx supabase db lint` | Passed, no schema errors |
+| `npx supabase db advisors` | Passed, no issues |
+| Table creation | 7 public tables created |
+| Seed data | 4 districts, 9 Nowon libraries |
+| RLS | Enabled on all 7 public tables |
+| Duplicate guard | Second insert with same `phone_hash` failed on `survey_pii_phone_hash_key` |
+
+The local Supabase config uses non-default ports to avoid conflict with the existing `libanalysis-v2` local Supabase stack.
 
 ## Follow-Up Decisions
 
