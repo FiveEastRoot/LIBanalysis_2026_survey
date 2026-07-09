@@ -18,6 +18,8 @@
 
 응답 제출은 브라우저에서 Google Sheets로 직접 보내지 않고, 같은 도메인의 Netlify Function `/api/submit-survey`를 거쳐 저장합니다.
 
+조사 폼 문항 및 편의성 수정 작업표는 [docs/form-revision-worklist.md](docs/form-revision-worklist.md)에 정리되어 있습니다.
+
 전달 구간 보안 처리 내역은 [docs/security-data-transfer.md](docs/security-data-transfer.md)에 정리되어 있습니다.
 
 현재 운영 연결값:
