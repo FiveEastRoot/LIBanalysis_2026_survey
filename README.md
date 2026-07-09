@@ -26,6 +26,8 @@
 
 Supabase 원천저장 및 관리자 대시보드 연계 목표 구조는 [docs/supabase-source-of-truth-plan.md](docs/supabase-source-of-truth-plan.md)에 정리되어 있습니다.
 
+조사폼 제출, DB, 운영 흐름, 데이터 흐름의 시각화 문서는 [docs/survey-form-storage-architecture.md](docs/survey-form-storage-architecture.md)에 정리되어 있습니다.
+
 현재 운영 연결값:
 
 - Google Sheet: `1vIzG0PwrPzUUBYfKIGkJHeWIKNzM-8munnUsZX7jKzs`
