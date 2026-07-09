@@ -24,6 +24,8 @@
 
 전화번호 암호화 및 로컬 복호화 절차는 [docs/phone-encryption-operations.md](docs/phone-encryption-operations.md)에 정리되어 있습니다.
 
+Supabase 원천저장 및 관리자 대시보드 연계 목표 구조는 [docs/supabase-source-of-truth-plan.md](docs/supabase-source-of-truth-plan.md)에 정리되어 있습니다.
+
 현재 운영 연결값:
 
 - Google Sheet: `1vIzG0PwrPzUUBYfKIGkJHeWIKNzM-8munnUsZX7jKzs`
