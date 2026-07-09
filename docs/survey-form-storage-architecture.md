@@ -278,7 +278,7 @@ flowchart TD
 | 전체 Analysis/PII export | 전체 자치구 통합 파일 다운로드 | 시스템 전체 관리자 | `admin_export_log` |
 | Google Sheets 백업 | 권한 범위에 맞춰 현재 시트 구조와 같은 탭으로 백업 | 자치구 관리자, 시스템 전체 관리자 | `admin_export_log` |
 | 일반 직원 계정 생성 | 자치구 관리자가 직원 계정과 소속 도서관 지정 | 자치구 관리자 | 계정 관리 로그 |
-| 자치구 관리자 계정 관리 | 자치구별 1개 관리자 계정 생성/관리 | 시스템 전체 관리자 | 계정 관리 로그 |
+| 자치구 관리자 계정 생성/배포 | 시스템 전체 관리자가 자치구별 관리자 계정을 생성하고 배포 | 시스템 전체 관리자 | 계정 관리 로그 |
 | 로컬 복호화 | PII CSV를 로컬 키로 복호화 | 지정 운영자 | 로컬 보안 절차 |
 
 ## 작업 우선순위
@@ -288,10 +288,11 @@ flowchart TD
 3. Netlify Function 저장 대상을 Supabase로 전환
 4. 기존 Apps Script/Google Sheets 저장 흐름을 백업 기능으로 재배치
 5. 일반 직원/자치구 관리자/시스템 전체 관리자 권한 모델 정의
-6. 자치구 관리자 계정 생성 및 일반 직원 소속 관리 흐름 정의
-7. 권한 범위별 Analysis CSV / PII CSV export 규격 확정
-8. Google Sheets 백업 규격 확정
-9. 분석 대시보드 입력 구조와 Supabase view/export 매핑
+6. 시스템 전체 관리자에 의한 자치구 관리자 계정 생성/배포 흐름 정의
+7. 자치구 관리자에 의한 일반 직원 계정 생성 및 소속 관리 흐름 정의
+8. 권한 범위별 Analysis CSV / PII CSV export 규격 확정
+9. Google Sheets 백업 규격 확정
+10. 분석 대시보드 입력 구조와 Supabase view/export 매핑
 
 ## 로컬 관련 문서
 
