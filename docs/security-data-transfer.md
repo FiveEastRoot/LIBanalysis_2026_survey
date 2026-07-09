@@ -43,7 +43,7 @@ Supabase
 | Server-side payload validation | Netlify Function validates payload shape, phone number, consent value, progress fields, and allowlisted export fields. | Applied |
 | Phone protection before storage | Netlify Function converts normalized phone number to `phone_hash` and `phone_encrypted` before DB insert. | Applied |
 | PII separation | Analysis answers are stored in `survey_analysis_export`; consent and encrypted/hash phone fields are stored in `survey_pii`; operational events are stored in `survey_submission_log`. | Applied |
-| Duplicate submission guard | `survey_pii.phone_hash` unique constraint rejects repeated completed submissions. | Applied |
+| Duplicate submission guard | Phone-consented submissions are rejected by `survey_pii.phone_hash` unique constraint. Phone-unconsented submissions are only soft-blocked in the same browser by localStorage. | Applied |
 | Plain phone exclusion | Supabase and Google Sheets backup store no raw phone number. | Applied |
 | Response caching | Netlify Function responses include `Cache-Control: no-store`. | Applied |
 | RLS | RLS is enabled on all survey tables. Server-only tables have no direct anon/authenticated policies. | Applied |
@@ -56,10 +56,10 @@ The Netlify Function performs the server-side gate:
 - `piiPayload` must be an object.
 - `analysisPayload` keys must be part of the approved analysis export schema.
 - `piiPayload` keys must be `P1-EXCLUDE` or `P2-EXCLUDE`.
-- `piiPayload["P2-EXCLUDE"]` must contain exactly 11 digits after normalization.
-- `piiPayload["P1-EXCLUDE"]` must equal `취급위탁에 동의`.
+- If `piiPayload["P1-EXCLUDE"]` equals `취급위탁에 동의`, `piiPayload["P2-EXCLUDE"]` must contain exactly 11 digits after normalization.
+- If `piiPayload["P1-EXCLUDE"]` equals `동의하지 않음(경품지급불가)`, phone fields are not stored in `survey_pii`; the browser uses localStorage for same-browser repeat prevention.
 - `completedFields` and `totalFields` must be numbers.
-- The normalized phone number is transformed into `phone_hash`, `phone_encrypted`, and `phone_encryption_version` before storage.
+- Consented normalized phone numbers are transformed into `phone_hash`, `phone_encrypted`, and `phone_encryption_version` before storage.
 
 ## Storage Separation
 

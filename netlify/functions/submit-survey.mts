@@ -13,6 +13,7 @@ type SurveySubmission = {
 
 const maxBodyBytes = 900_000;
 const consentValue = "취급위탁에 동의";
+const noConsentValue = "동의하지 않음(경품지급불가)";
 const phoneEncryptionVersion = "v1";
 const allowedAnalysisFields = new Set([
   "SQ1", "SQ2", "SQ3", "SQ3-DONG", "SQ4", "SQ5", "BQ1", "BQ2",
@@ -96,33 +97,36 @@ export default async (req: Request, context: Context) => {
     return json({ ok: false, message: validationMessage }, 400);
   }
 
+  const phoneConsent = String(submission.piiPayload?.["P1-EXCLUDE"] ?? "") === consentValue;
   let protectedPiiPayload: {
     consentValue: string;
     phoneHash: string;
     phoneEncrypted: string;
     phoneEncryptionVersion: string;
-  };
-  try {
-    const normalizedPhoneValue = normalizedPhone(submission.piiPayload?.["P2-EXCLUDE"]);
-    protectedPiiPayload = {
-      consentValue,
-      phoneHash: hashPhone(normalizedPhoneValue, phoneHashSecret),
-      phoneEncrypted: encryptPhone(normalizedPhoneValue, phoneEncryptionKey),
-      phoneEncryptionVersion,
-    };
-  } catch (error) {
-    await logSubmission(supabase, {
-      requestId,
-      receivedAt,
-      submittedAt,
-      completedFields: submission.completedFields,
-      totalFields: submission.totalFields,
-      clientPath: safeClientPath,
-      userAgent,
-      eventType: "storage_failed",
-      message: error instanceof Error ? error.message : "phone_encryption_failed",
-    });
-    return json({ ok: false, message: "전화번호 암호화 설정이 올바르지 않습니다." }, 503);
+  } | null = null;
+  if (phoneConsent) {
+    try {
+      const normalizedPhoneValue = normalizedPhone(submission.piiPayload?.["P2-EXCLUDE"]);
+      protectedPiiPayload = {
+        consentValue,
+        phoneHash: hashPhone(normalizedPhoneValue, phoneHashSecret),
+        phoneEncrypted: encryptPhone(normalizedPhoneValue, phoneEncryptionKey),
+        phoneEncryptionVersion,
+      };
+    } catch (error) {
+      await logSubmission(supabase, {
+        requestId,
+        receivedAt,
+        submittedAt,
+        completedFields: submission.completedFields,
+        totalFields: submission.totalFields,
+        clientPath: safeClientPath,
+        userAgent,
+        eventType: "storage_failed",
+        message: error instanceof Error ? error.message : "phone_encryption_failed",
+      });
+      return json({ ok: false, message: "전화번호 암호화 설정이 올바르지 않습니다." }, 503);
+    }
   }
 
   const analysisResult = await supabase
@@ -152,40 +156,42 @@ export default async (req: Request, context: Context) => {
     return json({ ok: false, message: "응답 저장에 실패했습니다." }, 502);
   }
 
-  const piiResult = await supabase.from("survey_pii").insert({
-    submission_id: analysisResult.data.id,
-    request_id: requestId,
-    received_at: receivedAt,
-    submitted_at: submittedAt,
-    consent_value: protectedPiiPayload.consentValue,
-    phone_hash: protectedPiiPayload.phoneHash,
-    phone_encrypted: protectedPiiPayload.phoneEncrypted,
-    phone_encryption_version: protectedPiiPayload.phoneEncryptionVersion,
-  });
-
-  if (piiResult.error) {
-    await supabase.from("survey_analysis_export").delete().eq("id", analysisResult.data.id);
-    const duplicate = isUniqueViolation(piiResult.error, "survey_pii_phone_hash_key");
-    console.error("Failed to write survey PII response", piiResult.error);
-    await logSubmission(supabase, {
-      requestId,
-      receivedAt,
-      submittedAt,
-      completedFields: submission.completedFields,
-      totalFields: submission.totalFields,
-      clientPath: safeClientPath,
-      userAgent,
-      eventType: duplicate ? "duplicate_rejected" : "storage_failed",
-      message: piiResult.error.message,
+  if (protectedPiiPayload) {
+    const piiResult = await supabase.from("survey_pii").insert({
+      submission_id: analysisResult.data.id,
+      request_id: requestId,
+      received_at: receivedAt,
+      submitted_at: submittedAt,
+      consent_value: protectedPiiPayload.consentValue,
+      phone_hash: protectedPiiPayload.phoneHash,
+      phone_encrypted: protectedPiiPayload.phoneEncrypted,
+      phone_encryption_version: protectedPiiPayload.phoneEncryptionVersion,
     });
-    return json(
-      {
-        ok: false,
-        duplicate,
-        message: duplicate ? "이미 제출된 전화번호입니다." : "개인정보 저장에 실패했습니다.",
-      },
-      duplicate ? 409 : 502,
-    );
+
+    if (piiResult.error) {
+      await supabase.from("survey_analysis_export").delete().eq("id", analysisResult.data.id);
+      const duplicate = isUniqueViolation(piiResult.error, "survey_pii_phone_hash_key");
+      console.error("Failed to write survey PII response", piiResult.error);
+      await logSubmission(supabase, {
+        requestId,
+        receivedAt,
+        submittedAt,
+        completedFields: submission.completedFields,
+        totalFields: submission.totalFields,
+        clientPath: safeClientPath,
+        userAgent,
+        eventType: duplicate ? "duplicate_rejected" : "storage_failed",
+        message: piiResult.error.message,
+      });
+      return json(
+        {
+          ok: false,
+          duplicate,
+          message: duplicate ? "이미 제출된 전화번호입니다." : "개인정보 저장에 실패했습니다.",
+        },
+        duplicate ? 409 : 502,
+      );
+    }
   }
 
   await logSubmission(supabase, {
@@ -197,10 +203,10 @@ export default async (req: Request, context: Context) => {
     clientPath: safeClientPath,
     userAgent,
     eventType: "submitted",
-    message: "submitted",
+    message: phoneConsent ? "submitted" : "submitted_without_phone_consent",
   });
 
-  return json({ ok: true, requestId });
+  return json({ ok: true, requestId, phoneConsent });
 };
 
 export const config: Config = {
@@ -216,13 +222,14 @@ function validateSubmission(submission: SurveySubmission) {
     return "허용되지 않은 제출 항목이 포함되어 있습니다.";
   }
 
-  const phone = normalizedPhone(submission.piiPayload["P2-EXCLUDE"]);
-  if (!/^\d{11}$/.test(phone)) {
-    return "휴대폰 번호는 숫자 11자리여야 합니다.";
+  const consent = String(submission.piiPayload["P1-EXCLUDE"] ?? "");
+  if (consent !== consentValue && consent !== noConsentValue) {
+    return "개인정보 취급위탁 동의 여부를 선택해 주세요.";
   }
 
-  if (String(submission.piiPayload["P1-EXCLUDE"] ?? "") !== consentValue) {
-    return "개인정보 취급위탁 동의가 필요합니다.";
+  const phone = normalizedPhone(submission.piiPayload["P2-EXCLUDE"]);
+  if (consent === consentValue && !/^\d{11}$/.test(phone)) {
+    return "휴대폰 번호는 숫자 11자리여야 합니다.";
   }
 
   if (typeof submission.completedFields !== "number" || typeof submission.totalFields !== "number") {

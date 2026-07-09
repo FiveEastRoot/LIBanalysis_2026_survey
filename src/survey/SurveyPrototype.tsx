@@ -60,7 +60,10 @@ const surveyQuestions = reorderUsageFrequencyQuestions([
 ]);
 
 const submittedPhoneStorageKey = "libanalysis-survey-submitted-phones";
+const submittedAnonymousStorageKey = "libanalysis-survey-submitted-anonymous";
 const samplePhoneValue = "01012345678";
+const phoneConsentValue = "취급위탁에 동의";
+const phoneNoConsentValue = "동의하지 않음(경품지급불가)";
 
 export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }: SurveyPrototypeProps = {}) {
   const [currentIndex, setCurrentIndex] = React.useState(0);
@@ -106,12 +109,16 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
   }
 
   function goNext() {
-    if (question.code === "P2-EXCLUDE" && !isValidPhone(answers["P2-EXCLUDE"])) {
+    if (question.code === "P2-EXCLUDE" && !String(answers["P1-EXCLUDE"] ?? "").trim()) {
+      setSubmitMessage("개인정보 취급위탁 동의 여부를 선택해 주세요.");
+      return;
+    }
+    if (question.code === "P2-EXCLUDE" && hasPhoneConsent(answers) && !isValidPhone(answers["P2-EXCLUDE"])) {
       setSubmitMessage(isSamplePhone(answers["P2-EXCLUDE"]) ? "예시 번호는 사용할 수 없습니다. 실제 휴대폰 번호를 입력해 주세요." : "휴대폰 번호는 숫자 11자리로 입력해 주세요.");
       return;
     }
-    if (question.code === "P2-EXCLUDE" && !String(answers["P1-EXCLUDE"] ?? "").trim()) {
-      setSubmitMessage("개인정보 취급위탁 동의 여부를 선택해 주세요.");
+    if (question.code === "P2-EXCLUDE" && !hasPhoneConsent(answers) && hasSubmittedAnonymous()) {
+      setSubmitMessage("이 브라우저에서는 이미 전화번호 미입력 제출이 완료되었습니다.");
       return;
     }
     const rangeWarning = rangeWarningForQuestions(pageQuestions, answers);
@@ -129,17 +136,23 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
 
   async function handleSubmit() {
     const phone = normalizedPhone(answers["P2-EXCLUDE"]);
-    if (!isValidPhone(answers["P2-EXCLUDE"])) {
+    const phoneConsent = hasPhoneConsent(answers);
+    if (!String(answers["P1-EXCLUDE"] ?? "").trim()) {
+      setSubmitMessage("개인정보 취급위탁 동의 여부를 선택해 주세요.");
+      setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
+      return;
+    }
+    if (phoneConsent && !isValidPhone(answers["P2-EXCLUDE"])) {
       setSubmitMessage(isSamplePhone(answers["P2-EXCLUDE"]) ? "예시 번호는 사용할 수 없습니다. 실제 휴대폰 번호를 입력해 주세요." : "휴대폰 번호는 숫자 11자리로 입력해 주세요.");
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
     }
-    if (String(answers["P1-EXCLUDE"] ?? "") !== "취급위탁에 동의") {
-      setSubmitMessage("개인정보 취급위탁에 동의해야 제출할 수 있습니다.");
+    if (!phoneConsent && hasSubmittedAnonymous()) {
+      setSubmitMessage("이 브라우저에서는 이미 전화번호 미입력 제출이 완료되었습니다.");
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
     }
-    if (hasSubmittedPhone(phone)) {
+    if (phoneConsent && hasSubmittedPhone(phone)) {
       setSubmitMessage("이미 제출이 완료된 휴대폰 번호입니다. 같은 번호로는 다시 제출할 수 없습니다.");
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
@@ -162,8 +175,13 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
         setSubmitMessage(response.message || "제출 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
         return;
       }
-      saveSubmittedPhone(phone);
-      setSubmitMessage("제출이 완료되었습니다. 같은 휴대폰 번호로는 다시 제출할 수 없습니다.");
+      if (phoneConsent) {
+        saveSubmittedPhone(phone);
+        setSubmitMessage("제출이 완료되었습니다. 같은 휴대폰 번호로는 다시 제출할 수 없습니다.");
+      } else {
+        saveSubmittedAnonymous();
+        setSubmitMessage("제출이 완료되었습니다. 이 브라우저에서는 다시 제출할 수 없습니다.");
+      }
     } catch {
       setSubmitMessage("네트워크 오류로 제출하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.");
     } finally {
@@ -252,7 +270,7 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
               phoneValue={String(answers["P2-EXCLUDE"] ?? "")}
               consentValue={String(answers["P1-EXCLUDE"] ?? "")}
               onPhoneChange={(value) => updateAnswer("P2-EXCLUDE", value)}
-              onConsentChange={(value) => updateAnswer("P1-EXCLUDE", value)}
+              onConsentChange={(value) => updateAnswers({ "P1-EXCLUDE": value, ...(value === phoneNoConsentValue ? { "P2-EXCLUDE": "" } : {}) })}
             />
           ) : (
             isRq1Question(question) ? (
@@ -392,24 +410,25 @@ function ContactVerificationPage({
 }) {
   const consentQuestion = localSurveyQuestions.find((question) => question.code === "P1-EXCLUDE");
   const [privacyExpanded, setPrivacyExpanded] = React.useState(false);
+  const phoneDisabled = consentValue === phoneNoConsentValue;
 
   return (
     <div className="survey-question contact-page">
       <div className="contact-start-panel">
         {/* <span>설문 시작</span> */}
         <h2>본인 확인 후 설문을 시작합니다</h2>
-        <p>휴대폰 번호는 중복 제출 방지와 조사 운영 확인에만 사용됩니다.</p>
+        <p>휴대폰 번호 동의 시 번호 기준으로, 미동의 시 같은 브라우저 기준으로 중복 제출을 제한합니다.</p>
       </div>
 
       <div className="survey-question-title">
         <Phone size={22} />
         <div>
           <h2>연락처 확인</h2>
-          <p>중복 제출 방지와 조사 운영을 위해 휴대폰 번호를 확인합니다.</p>
+          <p>동의하지 않는 경우 전화번호 없이 제출할 수 있으며, 같은 브라우저에서만 재제출을 제한합니다.</p>
         </div>
       </div>
 
-      <PhoneInput value={phoneValue} onChange={onPhoneChange} />
+      <PhoneInput value={phoneValue} onChange={onPhoneChange} disabled={phoneDisabled} />
 
       {consentQuestion && (
         <div className="contact-consent-block">
@@ -431,6 +450,7 @@ function ContactVerificationPage({
           <p>
             수집한 휴대폰 번호는 본인 확인, 중복 제출 방지, 답례 발송 등 조사 운영 목적에만 사용합니다.
             분석용 export 파일에는 포함하지 않으며, 통계 분석에는 개인을 식별할 수 없는 응답 데이터만 사용합니다.
+            동의하지 않는 경우 전화번호는 수집하지 않고, 같은 브라우저의 제출 완료 정보만 이용해 반복 제출을 제한합니다.
             개인정보는 접근 권한이 제한된 운영 영역에 분리 보관하고, 조사 운영 목적 달성 후 내부 보관 기준에 따라 파기합니다.
           </p>
         )}
@@ -801,7 +821,7 @@ function LongTextInput({ value, onChange }: { value: string; onChange: (value: s
   );
 }
 
-function PhoneInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function PhoneInput({ value, onChange, disabled = false }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
   const [warning, setWarning] = React.useState("");
 
   function formatPhone(rawValue: string) {
@@ -820,6 +840,7 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (value: stri
       <span>전화번호</span>
       <input
         autoComplete="tel"
+        disabled={disabled}
         inputMode="tel"
         maxLength={11}
         pattern="[0-9]{11}"
@@ -840,7 +861,7 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (value: stri
           }
         }}
       />
-      <small className={helperWarning ? "input-warning" : ""}>{helperWarning || "숫자 11자리만 입력해 주세요."}</small>
+      <small className={!disabled && helperWarning ? "input-warning" : ""}>{disabled ? "동의하지 않음을 선택하면 전화번호를 수집하지 않습니다." : helperWarning || "숫자 11자리만 입력해 주세요."}</small>
     </label>
   );
 }
@@ -933,7 +954,7 @@ function buildPiiPayload(answers: Record<string, SurveyValue>) {
     .filter((question) => question.pii)
     .forEach((question) => {
       const value = answers[question.code];
-      payload[question.code] = question.code === "P2-EXCLUDE" && isSamplePhone(value) ? "" : value;
+      payload[question.code] = question.code === "P2-EXCLUDE" && (!hasPhoneConsent(answers) || isSamplePhone(value)) ? "" : value;
     });
   return payload;
 }
@@ -1213,6 +1234,22 @@ function saveSubmittedPhone(phone: string) {
   const phones = new Set(submittedPhones());
   phones.add(phone);
   window.localStorage.setItem(submittedPhoneStorageKey, JSON.stringify([...phones]));
+}
+
+function hasSubmittedAnonymous() {
+  try {
+    return window.localStorage.getItem(submittedAnonymousStorageKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveSubmittedAnonymous() {
+  window.localStorage.setItem(submittedAnonymousStorageKey, "1");
+}
+
+function hasPhoneConsent(answers: Record<string, SurveyValue>) {
+  return String(answers["P1-EXCLUDE"] ?? "") === phoneConsentValue;
 }
 
 function hasAnswer(value: SurveyValue) {
