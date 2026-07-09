@@ -31,6 +31,7 @@ sequenceDiagram
     API->>API: 전화번호 정규화(숫자 11자리)
     API->>API: phone_hash = HMAC-SHA256(phone)
     API->>API: phone_encrypted = AES-256-GCM(phone)
+    API->>DB: survey_analysis_export insert
     API->>DB: survey_pii insert(phone_hash unique)
 
     alt phone_hash already exists
@@ -38,7 +39,6 @@ sequenceDiagram
         API->>Log: duplicate_rejected 기록
         API-->>User: 중복 제출 차단 안내
     else new phone_hash
-        API->>DB: survey_analysis_export insert
         API->>Log: submitted 기록
         API-->>User: 제출 완료
     end
@@ -96,7 +96,7 @@ $env:PHONE_ENCRYPTION_KEY=(Get-Content .\local-secrets\phone-encryption.env | Wh
 node scripts/decrypt-phone-csv.mjs --input .\pii.csv --output .\pii-decrypted.csv
 ```
 
-결과 파일에는 기존 컬럼 뒤에 `phone_decrypted` 또는 `phoneDecrypted` 컬럼이 추가됩니다. 실제 컬럼명은 구현 단계에서 export 규격과 함께 확정합니다.
+결과 파일에는 기존 컬럼 뒤에 `phone_decrypted` 컬럼이 추가됩니다.
 
 ## Google Sheets 백업과의 관계
 
@@ -114,12 +114,12 @@ Google Sheets는 원천 저장소가 아니라 관리자 백업 대상입니다.
 - `PHONE_ENCRYPTION_KEY`를 바꾸면 기존 `phone_encrypted`는 이전 키로만 복호화할 수 있습니다.
 - 운영 중 키를 교체하려면 `phone_encryption_version`별로 키 보관, 복호화 스크립트 분기, 이전 데이터 처리 방침을 먼저 문서화해야 합니다.
 
-## 구현 전 체크리스트
+## 구현 체크리스트
 
-- [ ] Netlify Function에서 전화번호 정규화 후 해시/암호화 수행
-- [ ] `survey_pii.phone_hash` unique index 적용
-- [ ] `survey_pii.phone_encrypted` 원문 복원 가능한 암호문으로 저장
+- [x] Netlify Function에서 전화번호 정규화 후 해시/암호화 수행
+- [x] `survey_pii.phone_hash` unique index 적용
+- [x] `survey_pii.phone_encrypted` 원문 복원 가능한 암호문으로 저장
 - [ ] 분석용 export에서 PII 필드 제외
 - [ ] PII export API는 관리자 권한 범위 적용
-- [ ] 복호화 스크립트는 로컬에서만 실행
+- [x] 복호화 스크립트는 로컬에서만 실행
 - [ ] 복호화 결과 파일 보관/폐기 기준 확정

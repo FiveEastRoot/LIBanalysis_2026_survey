@@ -27,13 +27,13 @@ if (rows.length === 0) {
 }
 
 const headers = rows[0];
-const encryptedIndex = headers.indexOf("phoneEncrypted");
+const encryptedIndex = findHeaderIndex(headers, ["phone_encrypted", "phoneEncrypted"]);
 if (encryptedIndex < 0) {
-  console.error("Input CSV must include a phoneEncrypted column.");
+  console.error("Input CSV must include a phone_encrypted or phoneEncrypted column.");
   process.exit(1);
 }
 
-const outputHeaders = [...headers, "phoneDecrypted"];
+const outputHeaders = [...headers, "phone_decrypted"];
 const outputRows = [outputHeaders];
 
 for (const row of rows.slice(1)) {
@@ -64,6 +64,10 @@ function parseArgs(values) {
     if (values[index] === "--output") parsed.output = values[index + 1];
   }
   return parsed;
+}
+
+function findHeaderIndex(headers, names) {
+  return names.map((name) => headers.indexOf(name)).find((index) => index >= 0) ?? -1;
 }
 
 function parseCsv(text) {

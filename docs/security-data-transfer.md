@@ -1,6 +1,6 @@
-# Survey To Sheets Security Notes
+# Survey Submission Security Notes
 
-이 문서는 설문 폼 페이지에서 Google Sheets까지 응답이 전달되는 구간의 보안 처리 방식을 정리합니다.
+이 문서는 설문 폼 페이지에서 Supabase 원천 저장소까지 응답이 전달되는 구간의 보안 처리 방식을 정리합니다. Google Sheets는 원천 저장소가 아니라 관리자 백업/export 대상입니다.
 
 ## Data Flow
 
@@ -8,51 +8,49 @@
 Respondent browser
   -> HTTPS
 Netlify Function /api/submit-survey
+  -> server-side payload validation
   -> phone normalization, HMAC hash, AES-256-GCM encryption
-  -> HTTPS server-to-server request with shared secret
-Google Apps Script Web App
-  -> SpreadsheetApp write
-Google Sheets
+  -> Supabase service_role insert
+Supabase
+  -> survey_analysis_export
+  -> survey_pii
+  -> survey_submission_log
 ```
 
-폼 페이지는 Google Apps Script Web App이나 Google Sheets API로 직접 전송하지 않습니다. 응답자는 같은 Netlify 도메인의 `/api/submit-survey` 엔드포인트로만 제출하고, Netlify Function이 서버 측 환경변수에 저장된 Webhook URL과 비밀키를 사용해 Apps Script로 중계합니다. 원문 전화번호는 Netlify Function에서만 일시적으로 사용하고, Apps Script와 Google Sheets에는 `phoneHash`와 `phoneEncrypted`만 전달합니다.
+폼 페이지는 Supabase, Google Sheets, Apps Script로 직접 전송하지 않습니다. 응답자는 같은 Netlify 도메인의 `/api/submit-survey` 엔드포인트로만 제출하고, Netlify Function이 서버 측 환경변수에 저장된 Supabase service role key로 원천 DB에 저장합니다.
 
 ## Current Production Endpoints
 
 - Netlify site: `https://libanalysis-2026-survey.netlify.app`
 - Submit API: `https://libanalysis-2026-survey.netlify.app/api/submit-survey`
-- Google Sheet: `1vIzG0PwrPzUUBYfKIGkJHeWIKNzM-8munnUsZX7jKzs`
-- Apps Script deployment ID: `AKfycbxqcnhtxX72mHQXLia6No8j5gqsfRtMoWGLa2ENi134kQN5rJf0X9xLrljsqSyohq18`
-- Apps Script Web App: `https://script.google.com/macros/s/AKfycbxqcnhtxX72mHQXLia6No8j5gqsfRtMoWGLa2ENi134kQN5rJf0X9xLrljsqSyohq18/exec`
+- Supabase project: `libanalysis-v2-survey`
+- Supabase ref: `xerxcdneuvfoioiwhsxj`
+- Supabase URL: `https://xerxcdneuvfoioiwhsxj.supabase.co`
 
 ## Security Controls
 
 | Area | Implementation | Status |
 | --- | --- | --- |
-| Transport encryption | Netlify and Apps Script endpoints use HTTPS. | Applied |
-| Direct Sheets exposure | Browser code does not call Google Sheets or Apps Script directly. | Applied |
-| Webhook URL handling | Apps Script Web App URL is stored in Netlify environment variable `SHEETS_WEBHOOK_URL`. | Applied |
-| Secret handling | Shared secret is stored only in Netlify environment variable `SHEETS_WEBHOOK_SECRET` and Apps Script Properties. | Applied |
-| Phone encryption key handling | `PHONE_ENCRYPTION_KEY` is stored in Netlify environment variables and in the local operator decryption environment only. | Applied |
-| Phone hash secret handling | `PHONE_HASH_SECRET` is stored in Netlify environment variables and is used only for duplicate-check HMAC generation. | Applied |
-| Repository secret safety | `.env.example` contains placeholders only. Real secret is not committed. | Applied |
+| Transport encryption | Browser to Netlify and Netlify to Supabase use HTTPS. | Applied |
+| Direct DB exposure | Browser code does not call Supabase directly for submission. | Applied |
+| Service role handling | `SUPABASE_SERVICE_ROLE_KEY` is used only in Netlify Function runtime. | Applied |
+| Phone encryption key handling | `PHONE_ENCRYPTION_KEY` is stored in Netlify environment variables and local operator decryption environment only. | Applied |
+| Phone hash secret handling | `PHONE_HASH_SECRET` is stored in Netlify environment variables and used only for duplicate-check HMAC generation. | Applied |
+| Repository secret safety | `.env.example` contains placeholders only. Real secrets are not committed. | Applied |
 | HTTP method restriction | Netlify Function accepts only `POST`. | Applied |
 | Content type restriction | Netlify Function accepts only `application/json`. | Applied |
 | Request body limit | Netlify Function rejects bodies over `900,000` bytes. | Applied |
-| Server-side payload validation | Netlify Function validates payload shape, phone number, consent value, and progress fields before forwarding. | Applied |
-| Phone encryption before webhook | Netlify Function converts the normalized phone number to `phoneHash` and `phoneEncrypted` before calling Apps Script. | Applied |
-| Export field allowlist | Netlify Function rejects unknown analysis or PII fields, preventing accidental columns such as `TEST`. | Applied |
-| Webhook authentication | Apps Script compares request `secret` with Script Properties before writing. | Applied |
-| Webhook-side field filtering | Apps Script stores only approved analysis and PII fields even if an unexpected key reaches the webhook. | Applied |
-| PII separation | Analysis answers are written to `Analysis Export`; consent and encrypted/hash phone fields are written to `PII`; operational metadata is written to `Submission Log`. | Applied |
-| Phone exclusion from analysis export | Phone number is not included in `Analysis Export`. | Applied |
-| Duplicate submission guard | Apps Script rejects a submission when the same `phoneHash` already exists in `PII`. | Applied |
-| Plain phone exclusion from Sheets | Apps Script stores no raw `P2-EXCLUDE` value in Google Sheets. | Applied |
+| Server-side payload validation | Netlify Function validates payload shape, phone number, consent value, progress fields, and allowlisted export fields. | Applied |
+| Phone protection before storage | Netlify Function converts normalized phone number to `phone_hash` and `phone_encrypted` before DB insert. | Applied |
+| PII separation | Analysis answers are stored in `survey_analysis_export`; consent and encrypted/hash phone fields are stored in `survey_pii`; operational events are stored in `survey_submission_log`. | Applied |
+| Duplicate submission guard | `survey_pii.phone_hash` unique constraint rejects repeated completed submissions. | Applied |
+| Plain phone exclusion | Supabase and Google Sheets backup store no raw phone number. | Applied |
 | Response caching | Netlify Function responses include `Cache-Control: no-store`. | Applied |
+| RLS | RLS is enabled on all survey tables. Server-only tables have no direct anon/authenticated policies. | Applied |
 
 ## Validation Rules
 
-The Netlify Function performs the first server-side gate:
+The Netlify Function performs the server-side gate:
 
 - `analysisPayload` must be an object.
 - `piiPayload` must be an object.
@@ -61,48 +59,33 @@ The Netlify Function performs the first server-side gate:
 - `piiPayload["P2-EXCLUDE"]` must contain exactly 11 digits after normalization.
 - `piiPayload["P1-EXCLUDE"]` must equal `취급위탁에 동의`.
 - `completedFields` and `totalFields` must be numbers.
-- The normalized phone number is transformed into `phoneHash`, `phoneEncrypted`, and `phoneEncryptionVersion` before webhook forwarding.
-
-The Apps Script Web App performs the second gate:
-
-- Request `secret` must match Script Properties.
-- `phoneHash`, `phoneEncrypted`, and `phoneEncryptionVersion` must exist.
-- `phoneHash` must not already exist in the `PII` sheet.
-- Unknown analysis or PII keys are filtered out before sheet headers and rows are written.
+- The normalized phone number is transformed into `phone_hash`, `phone_encrypted`, and `phone_encryption_version` before storage.
 
 ## Storage Separation
 
-| Sheet tab | Purpose | PII included |
+| Table | Purpose | PII included |
 | --- | --- | --- |
-| `Analysis Export` | Analysis-ready survey response values | No phone number |
-| `PII` | Consent, phone hash, encrypted phone value, encryption version | Encrypted only |
-| `Submission Log` | Request ID, timestamps, progress, client path, user agent | No phone number |
+| `survey_analysis_export` | Analysis-ready survey response values | No phone number |
+| `survey_pii` | Consent, phone hash, encrypted phone value, encryption version | Encrypted only |
+| `survey_submission_log` | Request ID, timestamps, progress, client path, user agent, event type | No phone number |
 
-Analysis is planned as a file-upload workflow. The analysis program should use `Analysis Export` only and should not receive the `PII` sheet.
+Analysis is planned as a file-upload workflow. The analysis program should use Analysis CSV exports only and should not receive PII exports.
 
 Phone decryption is a separate local operator workflow documented in `docs/phone-encryption-operations.md`.
 
-## Verified Behavior
+## Google Sheets Backup
 
-- Netlify to Apps Script submission succeeded through the production URL.
-- Apps Script created and writes to `Analysis Export`, `PII`, and `Submission Log`.
-- Netlify Function is configured to forward only encrypted/hash phone values to Apps Script.
+Google Sheets backup is a later administrator action, not the live submission path. When backup is implemented, it should read from Supabase and preserve the same separation:
 
-## Known Operational Tasks
-
-- Remove test rows before production collection.
-- Remove old plaintext `P2-EXCLUDE` columns and rows created during pre-encryption connectivity tests before production collection.
-- Remove the temporary `TEST` column from `Analysis Export` if present. It was created by early connectivity tests and is not part of the real export schema. New submissions are now blocked/filtered from creating it again.
-- Keep Google Sheet sharing restricted to the minimum required operators.
-- Keep Apps Script project access restricted to operators who manage the integration.
-- Rotate `SHEETS_WEBHOOK_SECRET` when an operator leaves or if exposure is suspected.
+- Analysis data from `survey_analysis_export`
+- PII data from `survey_pii`
+- Operational logs from `survey_submission_log` or `admin_export_log`
 
 ## Remaining Security Considerations
 
 | Item | Current state | Recommendation |
 | --- | --- | --- |
 | Rate limiting | No dedicated rate limiter is implemented. | Consider Netlify-level rate limiting, CAPTCHA/Turnstile, or additional phone/session throttling before high-volume public launch. |
-| Webhook signing | Uses a static shared secret. | For stronger replay resistance, add HMAC signature with timestamp and reject stale requests. |
+| Admin export authorization | Not implemented in this repo yet. | Implement via dashboard API and `dashboard_users` scope checks. |
 | PII at rest | Phone numbers are stored as AES-256-GCM encrypted values plus HMAC hashes. | Keep decryption key outside GitHub and restrict it to authorized operators. |
-| Sheet permission governance | Controlled outside code by Google Drive sharing. | Review sharing before launch and remove link-wide edit access. |
-| Test data | Connectivity tests may remain in sheet tabs. | Delete test rows and columns before production start. |
+| Test data | Local and remote test submissions may be created during integration testing. | Delete test rows before production start. |

@@ -1,5 +1,6 @@
 import { createCipheriv, createHmac, randomBytes } from "node:crypto";
 import type { Config, Context } from "@netlify/functions";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type SurveySubmission = {
   analysisPayload?: Record<string, unknown>;
@@ -10,15 +11,9 @@ type SurveySubmission = {
   clientPath?: string;
 };
 
-type SheetsWebhookResult = {
-  ok?: boolean;
-  duplicate?: boolean;
-  message?: string;
-};
-
 const maxBodyBytes = 900_000;
 const consentValue = "취급위탁에 동의";
-const phoneEncryptionVersion = "phone-aes-256-gcm-v1";
+const phoneEncryptionVersion = "v1";
 const allowedAnalysisFields = new Set([
   "SQ1", "SQ2", "SQ3", "SQ3-DONG", "SQ4", "SQ5", "BQ1", "BQ2",
   "Q1-A-1", "Q1-A-2", "Q1-A-3", "Q1-A-4", "Q1-A-5", "Q1-A-6",
@@ -53,74 +48,157 @@ export default async (req: Request, context: Context) => {
     return json({ ok: false, message: "제출 데이터가 허용 크기를 초과했습니다." }, 413);
   }
 
-  const webhookUrl = Netlify.env.get("SHEETS_WEBHOOK_URL");
-  const webhookSecret = Netlify.env.get("SHEETS_WEBHOOK_SECRET");
-  const phoneEncryptionKey = Netlify.env.get("PHONE_ENCRYPTION_KEY");
-  const phoneHashSecret = Netlify.env.get("PHONE_HASH_SECRET");
-  if (!webhookUrl || !webhookSecret || !phoneEncryptionKey || !phoneHashSecret) {
+  const supabaseUrl = getEnv("SUPABASE_URL");
+  const supabaseServiceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const phoneEncryptionKey = getEnv("PHONE_ENCRYPTION_KEY");
+  const phoneHashSecret = getEnv("PHONE_HASH_SECRET");
+  if (!supabaseUrl || !supabaseServiceRoleKey || !phoneEncryptionKey || !phoneHashSecret) {
     return json({ ok: false, message: "제출 저장소가 아직 설정되지 않았습니다." }, 503);
   }
+
+  const supabase = createServiceClient(supabaseUrl, supabaseServiceRoleKey);
+  const receivedAt = new Date().toISOString();
+  const requestId = context.requestId;
+  const clientPath = "";
+  const userAgent = req.headers.get("user-agent") ?? "";
 
   let submission: SurveySubmission;
   try {
     submission = await req.json();
   } catch {
+    await logSubmission(supabase, {
+      requestId,
+      receivedAt,
+      submittedAt: null,
+      clientPath,
+      userAgent,
+      eventType: "validation_failed",
+      message: "invalid_json_body",
+    });
     return json({ ok: false, message: "요청 본문을 읽을 수 없습니다." }, 400);
   }
 
+  const submittedAt = safeSubmittedAt(submission.submittedAt);
+  const safeClientPath = safeString(submission.clientPath);
   const validationMessage = validateSubmission(submission);
   if (validationMessage) {
+    await logSubmission(supabase, {
+      requestId,
+      receivedAt,
+      submittedAt,
+      completedFields: submission.completedFields,
+      totalFields: submission.totalFields,
+      clientPath: safeClientPath,
+      userAgent,
+      eventType: "validation_failed",
+      message: validationMessage,
+    });
     return json({ ok: false, message: validationMessage }, 400);
   }
 
-  let protectedPiiPayload: Record<string, string>;
+  let protectedPiiPayload: {
+    consentValue: string;
+    phoneHash: string;
+    phoneEncrypted: string;
+    phoneEncryptionVersion: string;
+  };
   try {
     const normalizedPhoneValue = normalizedPhone(submission.piiPayload?.["P2-EXCLUDE"]);
     protectedPiiPayload = {
-      "P1-EXCLUDE": consentValue,
+      consentValue,
       phoneHash: hashPhone(normalizedPhoneValue, phoneHashSecret),
       phoneEncrypted: encryptPhone(normalizedPhoneValue, phoneEncryptionKey),
       phoneEncryptionVersion,
     };
-  } catch {
+  } catch (error) {
+    await logSubmission(supabase, {
+      requestId,
+      receivedAt,
+      submittedAt,
+      completedFields: submission.completedFields,
+      totalFields: submission.totalFields,
+      clientPath: safeClientPath,
+      userAgent,
+      eventType: "storage_failed",
+      message: error instanceof Error ? error.message : "phone_encryption_failed",
+    });
     return json({ ok: false, message: "전화번호 암호화 설정이 올바르지 않습니다." }, 503);
   }
 
-  const upstreamResponse = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      secret: webhookSecret,
-      requestId: context.requestId,
-      receivedAt: new Date().toISOString(),
-      client: {
-        path: safeString(submission.clientPath),
-        userAgent: req.headers.get("user-agent") ?? "",
-        ip: context.ip ?? "",
-      },
-      analysisPayload: submission.analysisPayload,
-      piiPayload: protectedPiiPayload,
+  const analysisResult = await supabase
+    .from("survey_analysis_export")
+    .insert({
+      request_id: requestId,
+      received_at: receivedAt,
+      submitted_at: submittedAt,
+      analysis_payload: submission.analysisPayload,
+    })
+    .select("id")
+    .single();
+
+  if (analysisResult.error) {
+    await logSubmission(supabase, {
+      requestId,
+      receivedAt,
+      submittedAt,
       completedFields: submission.completedFields,
       totalFields: submission.totalFields,
-      submittedAt: submission.submittedAt,
-    }),
+      clientPath: safeClientPath,
+      userAgent,
+      eventType: "storage_failed",
+      message: analysisResult.error.message,
+    });
+    return json({ ok: false, message: "응답 저장에 실패했습니다." }, 502);
+  }
+
+  const piiResult = await supabase.from("survey_pii").insert({
+    submission_id: analysisResult.data.id,
+    request_id: requestId,
+    received_at: receivedAt,
+    submitted_at: submittedAt,
+    consent_value: protectedPiiPayload.consentValue,
+    phone_hash: protectedPiiPayload.phoneHash,
+    phone_encrypted: protectedPiiPayload.phoneEncrypted,
+    phone_encryption_version: protectedPiiPayload.phoneEncryptionVersion,
   });
 
-  const result = await readWebhookResult(upstreamResponse);
-  if (!upstreamResponse.ok || result.ok === false) {
+  if (piiResult.error) {
+    await supabase.from("survey_analysis_export").delete().eq("id", analysisResult.data.id);
+    const duplicate = isUniqueViolation(piiResult.error, "survey_pii_phone_hash_key");
+    await logSubmission(supabase, {
+      requestId,
+      receivedAt,
+      submittedAt,
+      completedFields: submission.completedFields,
+      totalFields: submission.totalFields,
+      clientPath: safeClientPath,
+      userAgent,
+      eventType: duplicate ? "duplicate_rejected" : "storage_failed",
+      message: piiResult.error.message,
+    });
     return json(
       {
         ok: false,
-        duplicate: Boolean(result.duplicate),
-        message: result.message || "Google Sheets 저장에 실패했습니다.",
+        duplicate,
+        message: duplicate ? "이미 제출된 전화번호입니다." : "개인정보 저장에 실패했습니다.",
       },
-      result.duplicate ? 409 : 502,
+      duplicate ? 409 : 502,
     );
   }
 
-  return json({ ok: true, requestId: context.requestId });
+  await logSubmission(supabase, {
+    requestId,
+    receivedAt,
+    submittedAt,
+    completedFields: submission.completedFields,
+    totalFields: submission.totalFields,
+    clientPath: safeClientPath,
+    userAgent,
+    eventType: "submitted",
+    message: "submitted",
+  });
+
+  return json({ ok: true, requestId });
 };
 
 export const config: Config = {
@@ -152,15 +230,6 @@ function validateSubmission(submission: SurveySubmission) {
   return "";
 }
 
-async function readWebhookResult(response: Response): Promise<SheetsWebhookResult> {
-  try {
-    const value = await response.json();
-    return isRecord(value) ? value : {};
-  } catch {
-    return {};
-  }
-}
-
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -181,6 +250,12 @@ function hasUnknownKeys(payload: Record<string, unknown>, allowedKeys: Set<strin
 
 function safeString(value: unknown) {
   return typeof value === "string" ? value.slice(0, 240) : "";
+}
+
+function safeSubmittedAt(value: unknown) {
+  if (typeof value !== "string") return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
 }
 
 function normalizedPhone(value: unknown) {
@@ -211,4 +286,53 @@ function decodeBase64Key(value: string, name: string) {
     throw new Error(`${name} must be a base64-encoded 32-byte key.`);
   }
   return key;
+}
+
+function getEnv(name: string) {
+  const netlifyValue = typeof Netlify === "undefined" ? "" : Netlify.env.get(name);
+  return netlifyValue || process.env[name] || "";
+}
+
+function createServiceClient(supabaseUrl: string, serviceRoleKey: string) {
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+async function logSubmission(
+  supabase: SupabaseClient,
+  value: {
+    requestId: string;
+    receivedAt: string;
+    submittedAt: string | null;
+    completedFields?: number;
+    totalFields?: number;
+    clientPath: string;
+    userAgent: string;
+    eventType: "submitted" | "duplicate_rejected" | "validation_failed" | "storage_failed";
+    message: string;
+  },
+) {
+  const { error } = await supabase.from("survey_submission_log").insert({
+    request_id: value.requestId,
+    received_at: value.receivedAt,
+    submitted_at: value.submittedAt,
+    completed_fields: value.completedFields,
+    total_fields: value.totalFields,
+    client_path: value.clientPath,
+    user_agent: value.userAgent,
+    event_type: value.eventType,
+    message: value.message,
+  });
+  if (error) {
+    console.error("Failed to write survey submission log", error);
+  }
+}
+
+function isUniqueViolation(error: { code?: string; message?: string; details?: string }, constraintName: string) {
+  const text = `${error.message ?? ""} ${error.details ?? ""}`;
+  return error.code === "23505" && text.includes(constraintName);
 }

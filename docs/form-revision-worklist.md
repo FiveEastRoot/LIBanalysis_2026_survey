@@ -10,7 +10,7 @@
    - 단일응답/복수응답/순위응답 전환
    - 조건부 노출 변경
    - 값 코딩 방식 변경
-   - Apps Script 및 Netlify allowlist 동시 수정 필요
+   - Supabase 저장 함수 및 Netlify allowlist 동시 수정 필요
 
 2. 응답 흐름에 영향을 주는 편의성 수정
    - 자동 다음 이동
@@ -46,7 +46,7 @@
 
 | Item | Question code or area | Requested change | Impact | Files likely affected | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 | TBD | 문항 수정 내용 확정 필요 | TBD | `src/survey/questionSchema.ts`, `src/survey/SurveyPrototype.tsx`, `netlify/functions/submit-survey.mts`, `apps-script/sheets-webhook.gs` | Pending |
+| 1 | TBD | 문항 수정 내용 확정 필요 | TBD | `src/survey/questionSchema.ts`, `src/survey/SurveyPrototype.tsx`, `netlify/functions/submit-survey.mts` | Pending |
 | 2 | TBD | 편의성 수정 내용 확정 필요 | TBD | `src/survey/SurveyPrototype.tsx`, `src/survey/survey.css` | Pending |
 
 ## Required Checks After Each Change
@@ -56,8 +56,6 @@
 - 실제 폼에서 모바일 폭 확인
 - 실제 폼에서 웹 폭 확인
 - export preview 확인
-- Netlify API 제출 테스트
-- Google Sheets 저장 결과 확인
-- 문항 코드 변경 시 Netlify/API allowlist 및 Apps Script allowlist 업데이트
+- Netlify API 제출 및 Supabase 저장 테스트
+- 문항 코드 변경 시 Netlify/API allowlist 업데이트
 - 문항 코드 변경 시 분석 대시보드 변경 필요 여부 표시
-
