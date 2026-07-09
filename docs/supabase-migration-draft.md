@@ -5,6 +5,7 @@
 ## Migration File
 
 - `supabase/migrations/20260709093653_initial_survey_storage_schema.sql`
+- Local Supabase project id: `libanalysis-v2-survey`
 
 ## Included Objects
 
