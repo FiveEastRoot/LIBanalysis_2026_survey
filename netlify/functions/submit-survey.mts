@@ -137,6 +137,7 @@ export default async (req: Request, context: Context) => {
     .single();
 
   if (analysisResult.error) {
+    console.error("Failed to write survey analysis response", analysisResult.error);
     await logSubmission(supabase, {
       requestId,
       receivedAt,
@@ -165,6 +166,7 @@ export default async (req: Request, context: Context) => {
   if (piiResult.error) {
     await supabase.from("survey_analysis_export").delete().eq("id", analysisResult.data.id);
     const duplicate = isUniqueViolation(piiResult.error, "survey_pii_phone_hash_key");
+    console.error("Failed to write survey PII response", piiResult.error);
     await logSubmission(supabase, {
       requestId,
       receivedAt,
