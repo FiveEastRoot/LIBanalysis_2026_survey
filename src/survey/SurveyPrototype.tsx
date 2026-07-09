@@ -108,6 +108,21 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
     setAnswers((current) => ({ ...current, ...patch }));
   }
 
+  function handleContactConsentChange(value: string) {
+    if (value === phoneNoConsentValue) {
+      if (hasSubmittedAnonymous()) {
+        setSubmitMessage("이 브라우저에서는 이미 전화번호 미입력 제출이 완료되었습니다.");
+        return;
+      }
+      setSubmitMessage("");
+      setAnswers((current) => ({ ...current, "P1-EXCLUDE": value, "P2-EXCLUDE": "" }));
+      setCurrentIndex((index) => nextVisibleQuestionIndex(index, { ...answers, "P1-EXCLUDE": value, "P2-EXCLUDE": "" }));
+      return;
+    }
+    updateAnswers({ "P1-EXCLUDE": value });
+    setSubmitMessage("");
+  }
+
   function goNext() {
     if (question.code === "P2-EXCLUDE" && !String(answers["P1-EXCLUDE"] ?? "").trim()) {
       setSubmitMessage("개인정보 취급위탁 동의 여부를 선택해 주세요.");
@@ -270,7 +285,7 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
               phoneValue={String(answers["P2-EXCLUDE"] ?? "")}
               consentValue={String(answers["P1-EXCLUDE"] ?? "")}
               onPhoneChange={(value) => updateAnswer("P2-EXCLUDE", value)}
-              onConsentChange={(value) => updateAnswers({ "P1-EXCLUDE": value, ...(value === phoneNoConsentValue ? { "P2-EXCLUDE": "" } : {}) })}
+              onConsentChange={handleContactConsentChange}
             />
           ) : (
             isRq1Question(question) ? (
@@ -410,29 +425,42 @@ function ContactVerificationPage({
 }) {
   const consentQuestion = localSurveyQuestions.find((question) => question.code === "P1-EXCLUDE");
   const [privacyExpanded, setPrivacyExpanded] = React.useState(false);
-  const phoneDisabled = consentValue === phoneNoConsentValue;
+  const showPhoneInput = consentValue === phoneConsentValue;
 
   return (
     <div className="survey-question contact-page">
       <div className="contact-start-panel">
-        {/* <span>설문 시작</span> */}
-        <h2>본인 확인 후 설문을 시작합니다</h2>
-        <p>휴대폰 번호 동의 시 번호 기준으로, 미동의 시 같은 브라우저 기준으로 중복 제출을 제한합니다.</p>
-      </div>
-
-      <div className="survey-question-title">
-        <Phone size={22} />
-        <div>
-          <h2>연락처 확인</h2>
-          <p>동의하지 않는 경우 전화번호 없이 제출할 수 있으며, 같은 브라우저에서만 재제출을 제한합니다.</p>
+        <div className="contact-start-copy">
+          <span>2026 공공도서관 서비스 성과조사</span>
+          <h2>잠깐의 확인 후 설문을 시작합니다</h2>
+          <p>응답은 분석용으로 분리 저장되며, 전화번호 제공에 동의하지 않아도 설문에는 참여할 수 있습니다.</p>
+        </div>
+        <div className="contact-start-steps" aria-label="설문 진행 안내">
+          <strong>1</strong>
+          <span>중복 제출 확인</span>
+          <strong>2</strong>
+          <span>설문 응답</span>
+          <strong>3</strong>
+          <span>제출 완료</span>
         </div>
       </div>
 
-      <PhoneInput value={phoneValue} onChange={onPhoneChange} disabled={phoneDisabled} />
-
       {consentQuestion && (
         <div className="contact-consent-block">
+          <div className="survey-question-title contact-consent-title">
+            <Phone size={22} />
+            <div>
+              <h2>연락처 제공 여부를 선택해 주세요</h2>
+              <p>동의하면 전화번호 기준으로 중복 제출을 확인하고, 동의하지 않으면 바로 설문으로 이동합니다.</p>
+            </div>
+          </div>
           <ChoiceButtons question={consentQuestion} value={consentValue} onChange={onConsentChange} />
+        </div>
+      )}
+
+      {showPhoneInput && (
+        <div className="contact-phone-panel">
+          <PhoneInput value={phoneValue} onChange={onPhoneChange} />
         </div>
       )}
 
