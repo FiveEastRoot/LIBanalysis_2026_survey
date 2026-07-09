@@ -1,3 +1,4 @@
+import { createCipheriv, createHmac, randomBytes } from "node:crypto";
 import type { Config, Context } from "@netlify/functions";
 
 type SurveySubmission = {
@@ -17,6 +18,7 @@ type SheetsWebhookResult = {
 
 const maxBodyBytes = 900_000;
 const consentValue = "취급위탁에 동의";
+const phoneEncryptionVersion = "phone-aes-256-gcm-v1";
 const allowedAnalysisFields = new Set([
   "SQ1", "SQ2", "SQ3", "SQ3-DONG", "SQ4", "SQ5", "BQ1", "BQ2",
   "Q1-A-1", "Q1-A-2", "Q1-A-3", "Q1-A-4", "Q1-A-5", "Q1-A-6",
@@ -53,7 +55,9 @@ export default async (req: Request, context: Context) => {
 
   const webhookUrl = Netlify.env.get("SHEETS_WEBHOOK_URL");
   const webhookSecret = Netlify.env.get("SHEETS_WEBHOOK_SECRET");
-  if (!webhookUrl || !webhookSecret) {
+  const phoneEncryptionKey = Netlify.env.get("PHONE_ENCRYPTION_KEY");
+  const phoneHashSecret = Netlify.env.get("PHONE_HASH_SECRET");
+  if (!webhookUrl || !webhookSecret || !phoneEncryptionKey || !phoneHashSecret) {
     return json({ ok: false, message: "제출 저장소가 아직 설정되지 않았습니다." }, 503);
   }
 
@@ -67,6 +71,19 @@ export default async (req: Request, context: Context) => {
   const validationMessage = validateSubmission(submission);
   if (validationMessage) {
     return json({ ok: false, message: validationMessage }, 400);
+  }
+
+  let protectedPiiPayload: Record<string, string>;
+  try {
+    const normalizedPhoneValue = normalizedPhone(submission.piiPayload?.["P2-EXCLUDE"]);
+    protectedPiiPayload = {
+      "P1-EXCLUDE": consentValue,
+      phoneHash: hashPhone(normalizedPhoneValue, phoneHashSecret),
+      phoneEncrypted: encryptPhone(normalizedPhoneValue, phoneEncryptionKey),
+      phoneEncryptionVersion,
+    };
+  } catch {
+    return json({ ok: false, message: "전화번호 암호화 설정이 올바르지 않습니다." }, 503);
   }
 
   const upstreamResponse = await fetch(webhookUrl, {
@@ -84,7 +101,7 @@ export default async (req: Request, context: Context) => {
         ip: context.ip ?? "",
       },
       analysisPayload: submission.analysisPayload,
-      piiPayload: submission.piiPayload,
+      piiPayload: protectedPiiPayload,
       completedFields: submission.completedFields,
       totalFields: submission.totalFields,
       submittedAt: submission.submittedAt,
@@ -119,7 +136,7 @@ function validateSubmission(submission: SurveySubmission) {
     return "허용되지 않은 제출 항목이 포함되어 있습니다.";
   }
 
-  const phone = String(submission.piiPayload["P2-EXCLUDE"] ?? "").replace(/[^\d]/g, "");
+  const phone = normalizedPhone(submission.piiPayload["P2-EXCLUDE"]);
   if (!/^\d{11}$/.test(phone)) {
     return "휴대폰 번호는 숫자 11자리여야 합니다.";
   }
@@ -164,4 +181,34 @@ function hasUnknownKeys(payload: Record<string, unknown>, allowedKeys: Set<strin
 
 function safeString(value: unknown) {
   return typeof value === "string" ? value.slice(0, 240) : "";
+}
+
+function normalizedPhone(value: unknown) {
+  return String(value ?? "").replace(/[^\d]/g, "");
+}
+
+function hashPhone(phone: string, secret: string) {
+  return createHmac("sha256", secret).update(phone).digest("base64url");
+}
+
+function encryptPhone(phone: string, keyValue: string) {
+  const key = decodeBase64Key(keyValue, "PHONE_ENCRYPTION_KEY");
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(phone, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [
+    "v1",
+    iv.toString("base64url"),
+    tag.toString("base64url"),
+    ciphertext.toString("base64url"),
+  ].join(":");
+}
+
+function decodeBase64Key(value: string, name: string) {
+  const key = Buffer.from(value, "base64");
+  if (key.length !== 32) {
+    throw new Error(`${name} must be a base64-encoded 32-byte key.`);
+  }
+  return key;
 }

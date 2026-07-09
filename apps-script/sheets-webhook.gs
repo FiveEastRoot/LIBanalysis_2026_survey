@@ -20,7 +20,7 @@ const ALLOWED_ANALYSIS_HEADERS = [
   "DQ7-E-1", "DQ7-E-2", "DQ7-E-3", "DQ7-E-4", "DQ7-E-5", "DQ7-E-6", "DQ7-E-7", "DQ7-E-8",
   "RQ1-1", "RQ1-2", "RQ1-3", "RQ1-4", "RQ1-5", "RQ1-6", "RQ1-7", "RQ2", "RQ3-1", "RQ3-2", "RQ3-3",
 ];
-const ALLOWED_PII_HEADERS = ["P1-EXCLUDE", "P2-EXCLUDE"];
+const ALLOWED_PII_HEADERS = ["P1-EXCLUDE", "phoneHash", "phoneEncrypted", "phoneEncryptionVersion"];
 
 function doPost(e) {
   try {
@@ -31,9 +31,11 @@ function doPost(e) {
     }
 
     const piiPayload = body.piiPayload || {};
-    const phone = String(piiPayload["P2-EXCLUDE"] || "").replace(/[^\d]/g, "");
-    if (!/^\d{11}$/.test(phone)) {
-      return jsonResponse({ ok: false, message: "Invalid phone" }, 400);
+    const phoneHash = String(piiPayload.phoneHash || "").trim();
+    const phoneEncrypted = String(piiPayload.phoneEncrypted || "").trim();
+    const phoneEncryptionVersion = String(piiPayload.phoneEncryptionVersion || "").trim();
+    if (!phoneHash || !phoneEncrypted || !phoneEncryptionVersion) {
+      return jsonResponse({ ok: false, message: "Invalid encrypted phone payload" }, 400);
     }
 
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -41,8 +43,8 @@ function doPost(e) {
     const analysisSheet = ensureSheet(spreadsheet, ANALYSIS_SHEET_NAME);
     const logSheet = ensureSheet(spreadsheet, LOG_SHEET_NAME);
 
-    ensureHeaders(piiSheet, ["requestId", "receivedAt", "submittedAt", "P1-EXCLUDE", "P2-EXCLUDE"]);
-    if (isDuplicatePhone(piiSheet, phone)) {
+    ensureHeaders(piiSheet, ["requestId", "receivedAt", "submittedAt", "P1-EXCLUDE", "phoneHash", "phoneEncrypted", "phoneEncryptionVersion"]);
+    if (isDuplicatePhoneHash(piiSheet, phoneHash)) {
       return jsonResponse({ ok: false, duplicate: true, message: "Duplicate phone" }, 409);
     }
 
@@ -64,7 +66,6 @@ function doPost(e) {
       receivedAt: body.receivedAt,
       submittedAt: body.submittedAt,
       ...filteredPiiPayload,
-      "P2-EXCLUDE": phone,
     });
 
     appendPayloadRow(logSheet, getHeaders(logSheet), {
@@ -135,7 +136,7 @@ function getHeaders(sheet) {
 function appendPayloadRow(sheet, headers, payload) {
   const row = headers.map(function (header) {
     const value = payload[header];
-    if (header === "P2-EXCLUDE") return value == null || value === "" ? "" : "'" + String(value);
+    if (["phoneHash", "phoneEncrypted"].indexOf(header) >= 0) return value == null || value === "" ? "" : "'" + String(value);
     if (Array.isArray(value)) return value.join("|");
     if (value && typeof value === "object") return JSON.stringify(value);
     return value == null ? "" : value;
@@ -143,13 +144,13 @@ function appendPayloadRow(sheet, headers, payload) {
   sheet.appendRow(row);
 }
 
-function isDuplicatePhone(piiSheet, phone) {
+function isDuplicatePhoneHash(piiSheet, phoneHash) {
   const headers = getHeaders(piiSheet);
-  const phoneColumn = headers.indexOf("P2-EXCLUDE") + 1;
-  if (phoneColumn <= 0 || piiSheet.getLastRow() < 2) return false;
-  const values = piiSheet.getRange(2, phoneColumn, piiSheet.getLastRow() - 1, 1).getValues();
+  const phoneHashColumn = headers.indexOf("phoneHash") + 1;
+  if (phoneHashColumn <= 0 || piiSheet.getLastRow() < 2) return false;
+  const values = piiSheet.getRange(2, phoneHashColumn, piiSheet.getLastRow() - 1, 1).getValues();
   return values.some(function (row) {
-    return String(row[0] || "").replace(/[^\d]/g, "") === phone;
+    return String(row[0] || "").trim() === phoneHash;
   });
 }
 

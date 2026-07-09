@@ -22,6 +22,8 @@
 
 전달 구간 보안 처리 내역은 [docs/security-data-transfer.md](docs/security-data-transfer.md)에 정리되어 있습니다.
 
+전화번호 암호화 및 로컬 복호화 절차는 [docs/phone-encryption-operations.md](docs/phone-encryption-operations.md)에 정리되어 있습니다.
+
 현재 운영 연결값:
 
 - Google Sheet: `1vIzG0PwrPzUUBYfKIGkJHeWIKNzM-8munnUsZX7jKzs`
@@ -33,10 +35,11 @@
 
 - 브라우저에는 Google Apps Script URL과 비밀키를 노출하지 않습니다.
 - Netlify Function이 전화번호 11자리, 개인정보 취급위탁 동의, payload 형식을 다시 검증합니다.
+- Netlify Function이 전화번호를 `phoneHash`와 `phoneEncrypted`로 변환한 뒤 Apps Script로 전달합니다.
 - Netlify Function은 HTTPS로 Apps Script Web App에 서버 간 전송합니다.
 - Apps Script는 `SHEETS_WEBHOOK_SECRET`이 일치할 때만 시트에 저장합니다.
-- 분석 응답은 `Analysis Export`, 연락처/동의 정보는 `PII`, 운영 로그는 `Submission Log` 시트에 분리 저장합니다.
-- 동일 전화번호가 `PII` 시트에 이미 있으면 중복 제출로 거절합니다.
+- 분석 응답은 `Analysis Export`, 암호화된 연락처/동의 정보는 `PII`, 운영 로그는 `Submission Log` 시트에 분리 저장합니다.
+- 동일 전화번호의 `phoneHash`가 `PII` 시트에 이미 있으면 중복 제출로 거절합니다.
 
 설정 순서:
 
@@ -49,4 +52,6 @@
 5. Netlify 환경변수에 아래 값을 저장합니다.
    - `SHEETS_WEBHOOK_URL`: Apps Script Web App `/exec` URL
    - `SHEETS_WEBHOOK_SECRET`: Apps Script 프로젝트 속성과 같은 값
+   - `PHONE_ENCRYPTION_KEY`: base64 인코딩된 32바이트 암호화 키
+   - `PHONE_HASH_SECRET`: HMAC용 긴 랜덤 문자열
 6. Netlify를 다시 배포한 뒤 실제 제출 테스트를 진행합니다.
