@@ -6,6 +6,9 @@
 
 - `supabase/migrations/20260709093653_initial_survey_storage_schema.sql`
 - Local Supabase project id: `libanalysis-v2-survey`
+- Remote Supabase project: `libanalysis-v2-survey`
+- Remote project ref: `xerxcdneuvfoioiwhsxj`
+- Remote region: `ap-northeast-2`
 
 ## Included Objects
 
@@ -56,6 +59,20 @@ npx supabase db advisors
 | Duplicate guard | Second insert with same `phone_hash` failed on `survey_pii_phone_hash_key` |
 
 The local Supabase config uses non-default ports to avoid conflict with the existing `libanalysis-v2` local Supabase stack.
+
+## Remote Project Push Result
+
+| Check | Result |
+| --- | --- |
+| Project creation | `libanalysis-v2-survey` created in `ap-northeast-2` |
+| Project ref | `xerxcdneuvfoioiwhsxj` |
+| `npx supabase link` | Passed |
+| `npx supabase db push --yes` | Passed |
+| Remote migration list | `20260709093653` present locally and remotely |
+| Remote table creation | 7 public tables created |
+| Remote seed data | 4 districts, 9 Nowon libraries |
+
+Security advisors currently report `RLS Enabled No Policy` as INFO for `survey_analysis_export`, `survey_pii`, `survey_submission_log`, and `admin_export_log`. This is intentional for the first migration because those tables are server-only and are accessed through Netlify Functions using `service_role`; no `anon` or direct `authenticated` access is granted. Detailed admin/export read policies should be added only when the dashboard API access model is finalized.
 
 ## Follow-Up Decisions
 
