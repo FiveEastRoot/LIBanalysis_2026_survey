@@ -160,9 +160,14 @@ erDiagram
         text message
     }
 
+    auth_users {
+        uuid id PK
+        text email
+    }
+
     dashboard_users {
         uuid id PK
-        uuid auth_user_id
+        uuid auth_user_id FK
         text email
         text role
         uuid district_id FK
@@ -200,9 +205,11 @@ erDiagram
 
     survey_analysis_export ||--|| survey_pii : "has encrypted PII"
     survey_analysis_export ||--o{ survey_submission_log : "tracked by request_id"
+    auth_users ||--o| dashboard_users : "authenticates"
     districts ||--o{ libraries : "contains"
     districts ||--o{ dashboard_users : "scopes district admins"
     libraries ||--o{ dashboard_users : "scopes staff"
+    dashboard_users ||--o{ dashboard_users : "creates staff/admin accounts"
     dashboard_users ||--o{ admin_export_log : "performs admin actions"
 ```
 
