@@ -136,13 +136,17 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
       setSubmitMessage("이 브라우저에서는 이미 전화번호 미입력 제출이 완료되었습니다.");
       return;
     }
-    const rangeWarning = rangeWarningForQuestions(pageQuestions, answers);
+    const nextAnswers = fillEmptyDirectInputsOnPage(pageQuestions, answers);
+    const rangeWarning = rangeWarningForQuestions(pageQuestions, nextAnswers);
     if (rangeWarning) {
       setSubmitMessage(rangeWarning);
       return;
     }
+    if (nextAnswers !== answers) {
+      setAnswers(nextAnswers);
+    }
     setSubmitMessage("");
-    setCurrentIndex((index) => nextVisibleQuestionIndex(index, answers));
+    setCurrentIndex((index) => nextVisibleQuestionIndex(index, nextAnswers));
   }
 
   function goPrevious() {
@@ -1167,6 +1171,34 @@ function questionsForPage(question: SurveyQuestion) {
     return surveyQuestions.filter(isRq1Question);
   }
   return [question];
+}
+
+function fillEmptyDirectInputsOnPage(questions: SurveyQuestion[], answers: Record<string, SurveyValue>) {
+  let nextAnswers: Record<string, SurveyValue> | null = null;
+
+  questions.forEach((item) => {
+    if (item.type !== "period") return;
+    const rawPeriod = answers[item.code];
+    const period: PeriodValue = isPeriodValue(rawPeriod) ? rawPeriod : { years: "", months: "" };
+    if (!period.years && !period.months) return;
+    const nextPeriod = {
+      years: period.years || "0",
+      months: period.months || "0",
+    };
+    if (nextPeriod.years !== period.years || nextPeriod.months !== period.months) {
+      nextAnswers = { ...(nextAnswers ?? answers), [item.code]: nextPeriod };
+    }
+  });
+
+  const numericQuestions = questions.filter((item) => item.type === "numeric");
+  if (numericQuestions.length > 1 && numericQuestions.some((item) => isFilledExportValue(answers[item.code]))) {
+    numericQuestions.forEach((item) => {
+      if (isFilledExportValue((nextAnswers ?? answers)[item.code])) return;
+      nextAnswers = { ...(nextAnswers ?? answers), [item.code]: "0" };
+    });
+  }
+
+  return nextAnswers ?? answers;
 }
 
 function isRq1Question(question: SurveyQuestion | undefined) {
