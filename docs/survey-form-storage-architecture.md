@@ -217,14 +217,16 @@ erDiagram
 
 | Table | Schema |
 | --- | --- |
-| `survey_analysis_export` | [survey_analysis_export](table-schemas/survey_analysis_export.md) |
-| `survey_pii` | [survey_pii](table-schemas/survey_pii.md) |
-| `survey_submission_log` | [survey_submission_log](table-schemas/survey_submission_log.md) |
-| `auth_users` | [auth_users](table-schemas/auth_users.md) |
-| `dashboard_users` | [dashboard_users](table-schemas/dashboard_users.md) |
-| `districts` | [districts](table-schemas/districts.md) |
-| `libraries` | [libraries](table-schemas/libraries.md) |
-| `admin_export_log` | [admin_export_log](table-schemas/admin_export_log.md) |
+| `survey_analysis_export` | [survey_analysis_export](schema-database/table-schemas/survey_analysis_export.md) |
+| `survey_pii` | [survey_pii](schema-database/table-schemas/survey_pii.md) |
+| `survey_submission_log` | [survey_submission_log](schema-database/table-schemas/survey_submission_log.md) |
+| `auth_users` | [auth_users](schema-database/table-schemas/auth_users.md) |
+| `dashboard_users` | [dashboard_users](schema-database/table-schemas/dashboard_users.md) |
+| `districts` | [districts](schema-database/table-schemas/districts.md) |
+| `libraries` | [libraries](schema-database/table-schemas/libraries.md) |
+| `admin_export_log` | [admin_export_log](schema-database/table-schemas/admin_export_log.md) |
+
+Notion에는 별도 데이터베이스 [조사 DB 테이블 스키마](https://app.notion.com/p/56a47ecc8fd943dd83bf6680b48e9d67)로 관리합니다.
 
 ## 데이터 산출물 분리 구조
 
