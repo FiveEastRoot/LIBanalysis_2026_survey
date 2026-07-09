@@ -356,3 +356,5 @@ flowchart TD
 - `docs/phone-encryption-operations.md`
 - `docs/security-data-transfer.md`
 - `docs/form-revision-worklist.md`
+
+암호화/복호화 운영 절차는 `docs/phone-encryption-operations.md`를 기준 문서로 관리합니다.
