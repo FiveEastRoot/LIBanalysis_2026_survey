@@ -919,28 +919,12 @@ function buildAnalysisPayload(answers: Record<string, SurveyValue>) {
   return payload;
 }
 
-const reverseCodedExportCodes = new Set(["DQ7-E-1", "DQ7-E-2", "DQ7-E-3", "DQ7-E-4", "DQ7-E-5", "DQ7-E-6", "DQ7-E-7", "DQ7-E-8"]);
-
 function exportValueForQuestion(question: SurveyQuestion, value: SurveyValue) {
   if (value === "해당없음") {
     return "9";
   }
 
-  // DQ7-E-*는 화면에서는 1=부정, 7=긍정으로 표시하지만,
-  // 분석 export는 기존 스키마(1=긍정, 7=부정)에 맞춰 역코딩한다.
-  if (reverseCodedExportCodes.has(question.code)) {
-    return reverseScale7Value(value);
-  }
-
   return value;
-}
-
-function reverseScale7Value(value: SurveyValue) {
-  const score = Number(value);
-  if (!Number.isInteger(score) || score < 1 || score > 7) {
-    return value;
-  }
-  return String(8 - score);
 }
 
 function buildPiiPayload(answers: Record<string, SurveyValue>) {
