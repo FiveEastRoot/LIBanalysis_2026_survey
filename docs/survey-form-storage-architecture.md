@@ -213,6 +213,19 @@ erDiagram
     dashboard_users ||--o{ admin_export_log : "performs admin actions"
 ```
 
+## 테이블별 스키마 문서
+
+| Table | Schema |
+| --- | --- |
+| `survey_analysis_export` | [survey_analysis_export](table-schemas/survey_analysis_export.md) |
+| `survey_pii` | [survey_pii](table-schemas/survey_pii.md) |
+| `survey_submission_log` | [survey_submission_log](table-schemas/survey_submission_log.md) |
+| `auth_users` | [auth_users](table-schemas/auth_users.md) |
+| `dashboard_users` | [dashboard_users](table-schemas/dashboard_users.md) |
+| `districts` | [districts](table-schemas/districts.md) |
+| `libraries` | [libraries](table-schemas/libraries.md) |
+| `admin_export_log` | [admin_export_log](table-schemas/admin_export_log.md) |
+
 ## 데이터 산출물 분리 구조
 
 ```mermaid
