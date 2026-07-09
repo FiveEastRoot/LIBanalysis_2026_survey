@@ -266,6 +266,40 @@ flowchart TD
     F3 --> E
 ```
 
+## 계정/권한 테이블 구조
+
+Supabase Auth는 로그인 인증, 비밀번호, 세션 관리를 담당하고, `dashboard_users`는 실제 업무 권한과 소속 범위를 담당합니다. 따라서 대시보드 접근 가능 여부는 Auth 인증만으로 결정하지 않고, `dashboard_users.role`, `district_id`, `library_id`, `is_active`를 함께 확인합니다.
+
+```mermaid
+flowchart TD
+    A["Supabase Auth<br/>로그인 인증/세션"] --> B["dashboard_users<br/>역할 + 소속 범위"]
+    B --> C{"role"}
+
+    C -->|staff| D["일반 직원<br/>library_id 필수<br/>소속 도서관 데이터만 접근"]
+    C -->|district_admin| E["자치구 관리자<br/>district_id 필수<br/>자치구 데이터 통합 접근"]
+    C -->|system_admin| F["시스템 전체 관리자<br/>전체 자치구 접근"]
+
+    F --> G["자치구 관리자 계정 생성/배포"]
+    G --> H["district_admin 계정<br/>자치구별 기본 1개"]
+    H --> I["일반 직원 계정 생성"]
+    I --> J["staff 계정<br/>district_id + library_id 지정"]
+
+    K["districts<br/>자치구 기준정보"] --> L["libraries<br/>도서관 기준정보"]
+    K --> H
+    K --> J
+    L --> J
+
+    B --> M["admin_export_log<br/>다운로드/백업 이력"]
+```
+
+| 테이블/기능 | 담당 역할 |
+| --- | --- |
+| Supabase Auth users | 로그인 인증, 비밀번호, 세션 관리 |
+| `dashboard_users` | 일반 직원/자치구 관리자/시스템 전체 관리자 역할, 소속 자치구/도서관, 계정 활성 상태 관리 |
+| `districts` | 자치구 기준정보 관리 |
+| `libraries` | 자치구별 도서관 기준정보 관리 |
+| `admin_export_log` | 관리자 다운로드, Google Sheets 백업, CSV export 작업 이력 관리 |
+
 ## 관리자 작업별 문서화 안건
 
 | 작업 | 설명 | 권한 | 로그 |

@@ -110,6 +110,25 @@ Survey form
 
 자치구별 자치구 관리자 계정은 1개를 기본 원칙으로 합니다. 시스템 전체 관리자가 자치구 관리자 계정을 생성해 각 자치구에 배포하고, 자치구 관리자는 일반 직원 계정을 생성하면서 어느 자치구의 어느 도서관 소속인지 지정합니다.
 
+Supabase Auth는 로그인 인증, 비밀번호, 세션을 담당하고 `dashboard_users`는 업무 권한과 소속 범위를 담당합니다. 대시보드는 Auth 로그인 이후에도 `dashboard_users.is_active`, `role`, `district_id`, `library_id`를 확인해 다운로드와 백업 범위를 제한합니다.
+
+```mermaid
+flowchart TD
+    A["Supabase Auth<br/>인증/세션"] --> B["dashboard_users<br/>업무 권한/소속"]
+    B --> C{"role"}
+    C -->|staff| D["일반 직원<br/>소속 도서관 데이터만 다운로드"]
+    C -->|district_admin| E["자치구 관리자<br/>자치구 통합 데이터 다운로드/백업"]
+    C -->|system_admin| F["시스템 전체 관리자<br/>전체 자치구 관리"]
+
+    F --> G["자치구 관리자 계정 생성/배포"]
+    E --> H["일반 직원 계정 생성"]
+    I["districts"] --> J["libraries"]
+    I --> E
+    I --> D
+    J --> D
+    B --> K["admin_export_log<br/>다운로드/백업 이력"]
+```
+
 ### `districts`
 
 자치구 기준정보입니다.
