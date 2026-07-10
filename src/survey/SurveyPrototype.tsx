@@ -57,10 +57,9 @@ const satisfactionProgressLabels: Record<string, string> = {
   Q4: "문화·교육",
   Q5: "관계",
   Q6: "독서·삶의 질",
-  Q7: "비용 혜택",
-  Q8: "투자 필요성",
+  Q7_Q8: "비용 혜택 & 투자 필요성",
 };
-const progressGroupOrder = ["pii", "respondent", "satisfaction:Q1", "satisfaction:Q2", "satisfaction:Q3", "satisfaction:Q4", "satisfaction:Q5", "satisfaction:Q6", "satisfaction:Q7", "satisfaction:Q8", "behavior", "reading", "open_text", "intro"];
+const progressGroupOrder = ["pii", "respondent", "satisfaction:Q1", "satisfaction:Q2", "satisfaction:Q3", "satisfaction:Q4", "satisfaction:Q5", "satisfaction:Q6", "satisfaction:Q7_Q8", "behavior", "reading", "open_text", "intro"];
 
 const surveyQuestions = reorderUsageFrequencyQuestions([
   ...localSurveyQuestions
@@ -1283,6 +1282,9 @@ function progressGroupIdForQuestion(question: SurveyQuestion) {
     return question.section;
   }
   const match = question.code.match(/^Q\d+/);
+  if (match?.[0] === "Q7" || match?.[0] === "Q8") {
+    return "satisfaction:Q7_Q8";
+  }
   return match ? `satisfaction:${match[0]}` : question.section;
 }
 
