@@ -51,14 +51,14 @@ const usageFrequencyPairs = [
 
 const rq1QuestionCodes = new Set(["RQ1-1", "RQ1-2", "RQ1-3", "RQ1-4", "RQ1-5", "RQ1-6", "RQ1-7"]);
 const satisfactionProgressLabels: Record<string, string> = {
-  Q1: "Q1 공간/편의",
-  Q2: "Q2 자료/정보",
-  Q3: "Q3 소통",
-  Q4: "Q4 문화·교육",
-  Q5: "Q5 관계",
-  Q6: "Q6 독서·삶의 질",
-  Q7: "Q7 비용 혜택",
-  Q8: "Q8 투자 필요성",
+  Q1: "공간/편의",
+  Q2: "자료/정보",
+  Q3: "소통",
+  Q4: "문화·교육",
+  Q5: "관계",
+  Q6: "독서·삶의 질",
+  Q7: "비용 혜택",
+  Q8: "투자 필요성",
 };
 const progressGroupOrder = ["pii", "respondent", "satisfaction:Q1", "satisfaction:Q2", "satisfaction:Q3", "satisfaction:Q4", "satisfaction:Q5", "satisfaction:Q6", "satisfaction:Q7", "satisfaction:Q8", "behavior", "reading", "open_text", "intro"];
 
