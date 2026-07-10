@@ -50,6 +50,17 @@ const usageFrequencyPairs = [
 ];
 
 const rq1QuestionCodes = new Set(["RQ1-1", "RQ1-2", "RQ1-3", "RQ1-4", "RQ1-5", "RQ1-6", "RQ1-7"]);
+const satisfactionProgressLabels: Record<string, string> = {
+  Q1: "Q1 공간/편의",
+  Q2: "Q2 자료/정보",
+  Q3: "Q3 소통",
+  Q4: "Q4 문화·교육",
+  Q5: "Q5 관계",
+  Q6: "Q6 독서·삶의 질",
+  Q7: "Q7 비용 혜택",
+  Q8: "Q8 투자 필요성",
+};
+const progressGroupOrder = ["pii", "respondent", "satisfaction:Q1", "satisfaction:Q2", "satisfaction:Q3", "satisfaction:Q4", "satisfaction:Q5", "satisfaction:Q6", "satisfaction:Q7", "satisfaction:Q8", "behavior", "reading", "open_text", "intro"];
 
 const surveyQuestions = reorderUsageFrequencyQuestions([
   ...localSurveyQuestions
@@ -254,18 +265,16 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
             </div>
             {progressExpanded && (
               <div className="survey-section-list" id="survey-section-progress">
-                {Object.entries(sectionLabels)
-                  .sort(([leftSection], [rightSection]) => sectionSortIndex(leftSection) - sectionSortIndex(rightSection))
-                  .filter(([section]) => surveyQuestions.some((item) => item.section === section))
-                  .map(([section, label]) => {
-                    const firstIncompleteIndex = findFirstIncompleteQuestionIndex(section, answers);
-                    const fallbackIndex = surveyQuestions.findIndex((item) => item.section === section);
+                {progressGroupsForSurvey()
+                  .map(({ id, label }) => {
+                    const firstIncompleteIndex = findFirstIncompleteProgressGroupQuestionIndex(id, answers);
+                    const fallbackIndex = surveyQuestions.findIndex((item) => progressGroupIdForQuestion(item) === id);
                     const targetIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : fallbackIndex;
-                    const sectionCompletion = buildSectionCompletion(section, answers);
+                    const sectionCompletion = buildProgressGroupCompletion(id, answers);
                     return (
                       <button
-                        key={section}
-                        className={question.section === section ? "active" : ""}
+                        key={id}
+                        className={progressGroupIdForQuestion(question) === id ? "active" : ""}
                         type="button"
                         onClick={() => setCurrentIndex(targetIndex)}
                       >
@@ -1006,12 +1015,23 @@ function buildExportCompletion(answers: Record<string, SurveyValue>) {
     );
 }
 
-function buildSectionCompletion(section: string, answers: Record<string, SurveyValue>) {
+function progressGroupsForSurvey() {
+  const groups = new Map<string, string>();
+  surveyQuestions.forEach((item) => {
+    const id = progressGroupIdForQuestion(item);
+    if (!groups.has(id)) {
+      groups.set(id, progressGroupLabelForQuestion(item, id));
+    }
+  });
+  return Array.from(groups, ([id, label]) => ({ id, label })).sort((left, right) => progressGroupSortIndex(left.id) - progressGroupSortIndex(right.id));
+}
+
+function buildProgressGroupCompletion(groupId: string, answers: Record<string, SurveyValue>) {
   return localSurveyQuestions
-    .filter((question) => question.section === section)
+    .filter((item) => progressGroupIdForQuestion(item) === groupId)
     .reduce(
-      (summary, question) => {
-        const stats = question.pii ? questionStatsForNavigation(question, answers[question.code]) : exportStatsForQuestion(question, answers[question.code]);
+      (summary, item) => {
+        const stats = item.pii ? questionStatsForNavigation(item, answers[item.code]) : exportStatsForQuestion(item, answers[item.code]);
         return {
           completedFields: summary.completedFields + stats.completedFields,
           totalFields: summary.totalFields + stats.totalFields,
@@ -1021,16 +1041,16 @@ function buildSectionCompletion(section: string, answers: Record<string, SurveyV
     );
 }
 
-function findFirstIncompleteQuestionIndex(section: string, answers: Record<string, SurveyValue>) {
-  if (section === "pii") {
+function findFirstIncompleteProgressGroupQuestionIndex(groupId: string, answers: Record<string, SurveyValue>) {
+  if (groupId === "pii") {
     const piiIncomplete = localSurveyQuestions
-      .filter((question) => question.section === "pii")
-      .some((question) => questionStatsForNavigation(question, answers[question.code]).completedFields < 1);
-    return piiIncomplete ? surveyQuestions.findIndex((question) => question.code === "P2-EXCLUDE") : surveyQuestions.findIndex((question) => question.section === "pii");
+      .filter((item) => progressGroupIdForQuestion(item) === groupId)
+      .some((item) => questionStatsForNavigation(item, answers[item.code]).completedFields < 1);
+    return piiIncomplete ? surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE") : surveyQuestions.findIndex((item) => progressGroupIdForQuestion(item) === groupId);
   }
-  return surveyQuestions.findIndex((question) => {
-    if (question.section !== section) return false;
-    const stats = question.pii ? questionStatsForNavigation(question, answers[question.code]) : exportStatsForQuestion(question, answers[question.code]);
+  return surveyQuestions.findIndex((item) => {
+    if (progressGroupIdForQuestion(item) !== groupId) return false;
+    const stats = item.pii ? questionStatsForNavigation(item, answers[item.code]) : exportStatsForQuestion(item, answers[item.code]);
     return stats.completedFields < stats.totalFields;
   });
 }
@@ -1256,6 +1276,29 @@ function sectionSortIndex(section: string) {
   const order = ["pii", "respondent", "satisfaction", "behavior", "reading", "open_text", "intro"];
   const index = order.indexOf(section);
   return index === -1 ? order.length : index;
+}
+
+function progressGroupIdForQuestion(question: SurveyQuestion) {
+  if (question.section !== "satisfaction") {
+    return question.section;
+  }
+  const match = question.code.match(/^Q\d+/);
+  return match ? `satisfaction:${match[0]}` : question.section;
+}
+
+function progressGroupLabelForQuestion(question: SurveyQuestion, groupId: string) {
+  if (question.section !== "satisfaction") {
+    return sectionLabels[question.section];
+  }
+  const satisfactionCode = groupId.replace("satisfaction:", "");
+  return satisfactionProgressLabels[satisfactionCode] ?? sectionLabels.satisfaction;
+}
+
+function progressGroupSortIndex(groupId: string) {
+  const index = progressGroupOrder.indexOf(groupId);
+  if (index >= 0) return index;
+  if (groupId.startsWith("satisfaction:")) return progressGroupOrder.indexOf("satisfaction:Q8");
+  return progressGroupOrder.length + sectionSortIndex(groupId);
 }
 
 function piiQuestionSortIndex(code: string) {
