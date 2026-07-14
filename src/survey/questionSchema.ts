@@ -1,4 +1,4 @@
-export type SurveySection = "intro" | "respondent" | "satisfaction" | "behavior" | "reading" | "open_text" | "pii";
+export type SurveySection = "intro" | "respondent" | "satisfaction" | "behavior" | "reading" | "local_feedback" | "pii";
 
 export type SurveyQuestionType =
   | "single_choice"
@@ -26,6 +26,7 @@ export type SurveyQuestion = {
   choices?: string[];
   dongChoicesByDistrict?: Record<string, string[]>;
   required?: boolean;
+  completionExcluded?: boolean;
   min?: number;
   max?: number;
   unit?: string;
@@ -822,7 +823,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "code": "DQ1-M",
     "section": "behavior",
     "type": "numeric",
-    "title": "2025년 기준 도서관 월 평균 이용 횟수",
+    "title": "2026년 기준 도서관 월 평균 이용 횟수",
     "required": true,
     "min": 0,
     "max": 31,
@@ -929,7 +930,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "code": "DQ6-M",
     "section": "behavior",
     "type": "numeric",
-    "title": "2025년 기준 도서관 대출 서비스 월 평균 이용 횟수",
+    "title": "2026년 기준 도서관 대출 서비스 월 평균 이용 횟수",
     "required": true,
     "min": 0,
     "max": 31,
@@ -1146,6 +1147,15 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "required": false
   },
   {
+    "code": "NW-OE-1",
+    "section": "local_feedback",
+    "type": "long_text",
+    "title": "그 밖에 도서관에 제안하고자 하는 내용을 자유롭게 적어주세요.",
+    "description": "서울도서관 제출 기준 문항이 아닌 노원구 로컬 참고 문항입니다. 300자 이내로 작성해 주세요. 이름, 전화번호 등 개인정보는 입력하지 말아 주세요.",
+    "required": false,
+    "completionExcluded": true
+  },
+  {
     "code": "P1-EXCLUDE",
     "section": "pii",
     "type": "single_choice",
@@ -1174,6 +1184,6 @@ export const sectionLabels: Record<SurveySection, string> = {
   satisfaction: "공통 만족도",
   behavior: "이용양태",
   reading: "독서",
-  open_text: "서술형",
+  local_feedback: "도서관 제안",
   pii: "연락처",
 };

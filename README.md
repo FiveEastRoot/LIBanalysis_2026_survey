@@ -1,6 +1,6 @@
 # LIBanalysis 2026 Survey
 
-2026 공공도서관 서비스 성과조사 설문 전용 Netlify 배포 앱입니다.
+2026 노원구 도서관 서비스 성과조사 설문 전용 Netlify 배포 앱입니다.
 
 ## Routes
 

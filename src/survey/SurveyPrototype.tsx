@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { localSurveyQuestions, sectionLabels, type SurveyQuestion } from "./questionSchema";
+import nowonLibraryLogo from "../assets/nowon-library-logo-vertical.png";
 import "./survey.css";
 
 type SurveyValue = string | number | string[] | PeriodValue | DistrictDongValue | Record<string, string>;
@@ -59,7 +60,7 @@ const satisfactionProgressLabels: Record<string, string> = {
   Q6: "독서·삶의 질",
   Q7_Q8: "비용 혜택 & 투자 필요성",
 };
-const progressGroupOrder = ["pii", "respondent", "satisfaction:Q1", "satisfaction:Q2", "satisfaction:Q3", "satisfaction:Q4", "satisfaction:Q5", "satisfaction:Q6", "satisfaction:Q7_Q8", "behavior", "reading", "open_text", "intro"];
+const progressGroupOrder = ["pii", "respondent", "satisfaction:Q1", "satisfaction:Q2", "satisfaction:Q3", "satisfaction:Q4", "satisfaction:Q5", "satisfaction:Q6", "satisfaction:Q7_Q8", "behavior", "reading", "local_feedback", "intro"];
 
 const surveyQuestions = reorderUsageFrequencyQuestions([
   ...localSurveyQuestions
@@ -74,6 +75,99 @@ const submittedAnonymousStorageKey = "libanalysis-survey-submitted-anonymous";
 const samplePhoneValue = "01012345678";
 const phoneConsentValue = "취급위탁에 동의";
 const phoneNoConsentValue = "동의하지 않음(경품지급불가)";
+const surveyTitle = "2026 노원구 도서관 서비스 성과조사";
+const questionKeywordByCode: Partial<Record<string, string>> = {
+  "Q1-A-1": "도서관 출입",
+  "Q1-A-2": "도서관 공간",
+  "Q1-A-3": "도서관 시설 이용",
+  "Q1-A-4": "도서관 자료",
+  "Q1-A-5": "편안",
+  "Q1-A-6": "쾌적",
+  "Q1-B-1": "경제적 부담",
+  "Q1-B-2": "소요되는 시간",
+  "Q1-B-3": "이동거리",
+  "Q1-B-4": "사용하는 금액",
+  "Q1-B-5": "도서관의 시설",
+  "Q1-B-6": "매력적인 공간",
+  "Q1-B-7": "마음이 편안하다",
+  "Q1-C": "공간/이용 편의성",
+  "Q2-A-1": "다양한 자료",
+  "Q2-A-2": "다양한 주제의 자료",
+  "Q2-A-3": "새로운 도서 및 정보",
+  "Q2-A-4": "새로운 학습 기회",
+  "Q2-A-5": "활용할 수 있는 자료",
+  "Q2-A-6": "원하는 자료",
+  "Q2-A-7": "자료 이용",
+  "Q2-B-1": "학업/업무",
+  "Q2-B-2": "자기계발 및 구직",
+  "Q2-B-3": "취미/관심사",
+  "Q2-B-4": "일상정보",
+  "Q2-B-5": "사회문제 이해",
+  "Q2-B-6": "경제적 부담",
+  "Q2-C": "정보 획득/활용",
+  "Q3-A-1": "이용 관련 정보",
+  "Q3-A-2": "신속하게 제공",
+  "Q3-A-3": "신뢰할 수 있다",
+  "Q3-A-4": "사서의 도움",
+  "Q3-A-5": "사서들",
+  "Q3-A-6": "의견을 표현",
+  "Q3-B-1": "도서관 정보",
+  "Q3-B-2": "기대치를 충족",
+  "Q3-B-3": "사서가 도움",
+  "Q3-B-4": "의견을 지속적으로 반영",
+  "Q3-B-5": "존중과 배려",
+  "Q3-C": "소통/정책반영",
+  "Q4-A-1": "원하는 프로그램",
+  "Q4-A-2": "자녀/가족",
+  "Q4-A-3": "새로운 프로그램",
+  "Q4-A-4": "문화 활동",
+  "Q4-A-5": "사회적 관심도",
+  "Q4-A-6": "봉사 기회",
+  "Q4-B-1": "프로그램을 확인",
+  "Q4-B-2": "문화/여가 생활",
+  "Q4-B-3": "문화·교육 프로그램",
+  "Q4-C": "문화·교육향유",
+  "Q5-A-1": "커뮤니티 활동",
+  "Q5-A-2": "세대 교류",
+  "Q5-A-3": "인간관계",
+  "Q5-B-1": "알게 된 사람",
+  "Q5-B-2": "가족 및 지인",
+  "Q5-B-3": "사람들과 더욱 잘 소통",
+  "Q5-B-4": "다른 세대",
+  "Q5-B-5": "관계가 좋아졌다",
+  "Q5-B-6": "지역과 연결된 느낌",
+  "Q5-C": "사회적 관계형성",
+  "Q6-B-1": "책에 대한 관심",
+  "Q6-B-2": "독서량",
+  "Q6-B-3": "다양한 즐거움",
+  "Q6-B-4": "이해력",
+  "Q6-B-5": "문화생활",
+  "Q6-B-6": "성장",
+  "Q6-B-7": "사는 곳에 관심",
+  "Q6-B-8": "도서관의 중요성",
+  "Q6-B-9": "삶의 질",
+  "Q6-C": "행복감 상승",
+  "Q7-D-12": "도서관 서비스의 혜택",
+  "Q8": "지속적으로 투자를",
+  "DQ1-Y": "연간 도서관 이용 횟수",
+  "DQ1-M": "도서관 월 평균 이용 횟수",
+  "DQ2": "도서관 이용 기간",
+  "DQ3": "누구와 함께",
+  "DQ4": "이용하는 목적",
+  "DQ5": "주된 목적",
+  "DQ6-Y": "연간 대출 서비스 이용 횟수",
+  "DQ6-M": "대출 서비스 월 평균 이용 횟수",
+  "DQ6-1": "도서를 대출하는 주된 목적",
+  "RQ1-1": "종이책",
+  "RQ1-2": "전자책",
+  "RQ1-3": "오디오북",
+  "RQ1-4": "웹소설",
+  "RQ1-5": "만화책",
+  "RQ1-6": "웹툰",
+  "RQ1-7": "독서 한 적 없음",
+  "RQ2": "책 읽기",
+  "RQ3": "도움 된 사항",
+};
 
 export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }: SurveyPrototypeProps = {}) {
   const [currentIndex, setCurrentIndex] = React.useState(0);
@@ -239,7 +333,7 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
       <section className="survey-top">
         <div className="survey-title-block">
           {/* <span>로컬 설문 프로토타입</span> */}
-          <h1>2026 공공도서관 서비스 성과조사</h1>
+          <h1>{surveyTitle}</h1>
           {/* <p>모바일과 웹에서 문항 유형에 맞는 입력 방식을 검토하는 화면입니다.</p> */}
         </div>
         {showModeLink && <a className="survey-mode-link" href="/mockup">목업 보기</a>}
@@ -312,9 +406,9 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
                 question={question}
                 value={answers[question.code]}
                 onChange={(value) => updateAnswer(question.code, value)}
-                onAutoAdvance={() => {
+                onAutoAdvance={(code, value) => {
                   setSubmitMessage("");
-                  setCurrentIndex((index) => Math.min(index + 1, surveyQuestions.length - 1));
+                  setCurrentIndex((index) => nextVisibleQuestionIndex(index, { ...answers, [code]: value }));
                 }}
                 onJumpToQuestion={(code) => {
                   const targetIndex = surveyQuestions.findIndex((item) => item.code === code);
@@ -380,14 +474,21 @@ function QuestionField({
   question: SurveyQuestion;
   value: SurveyValue;
   onChange: (value: SurveyValue) => void;
-  onAutoAdvance: () => void;
+  onAutoAdvance: (code: string, value: SurveyValue) => void;
   onJumpToQuestion: (code: string) => void;
   shouldAutoAdvance: boolean;
 }) {
+  function handleSingleChoiceChange(nextValue: string) {
+    onChange(nextValue);
+    if (shouldAutoAdvance) {
+      onAutoAdvance(question.code, nextValue);
+    }
+  }
+
   function handleLikertChange(nextValue: string) {
     onChange(nextValue);
     if (shouldAutoAdvance) {
-      onAutoAdvance();
+      onAutoAdvance(question.code, nextValue);
     }
   }
 
@@ -396,11 +497,11 @@ function QuestionField({
       <div className="survey-question-title">
         {iconForQuestion(question)}
         <div>
-          <h2>{question.type === "multi_choice" ? emphasizeAllSelect(question.title) : question.title}</h2>
+          <h2>{renderQuestionTitle(question)}</h2>
           {question.description && <p>{question.description}</p>}
         </div>
       </div>
-      {question.type === "single_choice" && <ChoiceButtons question={question} value={String(value ?? "")} onChange={onChange} />}
+      {question.type === "single_choice" && <ChoiceButtons question={question} value={String(value ?? "")} onChange={handleSingleChoiceChange} />}
       {question.type === "district_dong" && <DistrictDongInput question={question} value={isDistrictDongValue(value) ? value : { district: "", dong: "" }} onChange={onChange} />}
       {question.type === "multi_choice" && <MultiChoiceButtons question={question} value={Array.isArray(value) ? value : []} onChange={onChange} />}
       {question.type === "likert_7" && <LikertScale value={String(value ?? "")} onChange={handleLikertChange} />}
@@ -443,7 +544,7 @@ function ContactVerificationPage({
     <div className="survey-question contact-page">
       <div className="contact-start-panel">
         <div className="contact-start-copy">
-          <span>2026 공공도서관 서비스 성과조사</span>
+          <span>{surveyTitle}</span>
           <h2>잠깐의 확인 후 설문을 시작합니다</h2>
           <p>응답은 분석용으로 분리 저장되며, 전화번호 제공에 동의하지 않아도 설문에는 참여할 수 있습니다.</p>
         </div>
@@ -455,6 +556,7 @@ function ContactVerificationPage({
           <strong>3</strong>
           <span>제출 완료</span>
         </div>
+        <img className="contact-start-logo" src={nowonLibraryLogo} alt="노원구립도서관" />
       </div>
 
       {consentQuestion && (
@@ -462,7 +564,7 @@ function ContactVerificationPage({
           <div className="survey-question-title contact-consent-title">
             <Phone size={22} />
             <div>
-              <h2>연락처 제공 여부를 선택해 주세요</h2>
+              <h2><strong className="question-keyword">연락처 제공 여부</strong>를 선택해 주세요</h2>
               <p>동의하면 전화번호 기준으로 중복 제출을 확인하고, 동의하지 않으면 바로 설문으로 이동합니다.</p>
             </div>
           </div>
@@ -531,7 +633,7 @@ function Rq1QuestionGroup({
       <div className="survey-question-title">
         <Hash size={22} />
         <div>
-          <h2>지난 1년 동안 읽은 독서량</h2>
+          <h2><strong className="question-keyword">지난 1년 동안 읽은 독서량</strong></h2>
           <p>유형별 권수를 한 번에 입력해 주세요.</p>
         </div>
       </div>
@@ -539,7 +641,7 @@ function Rq1QuestionGroup({
       <div className="rq1-input-grid">
         {numericQuestions.map((item) => (
           <div className="rq1-input-card" key={item.code}>
-            <h3>{item.title.replace("지난 1년 동안 읽은 ", "")}</h3>
+            <h3>{renderTextWithKeyword(item.title.replace("지난 1년 동안 읽은 ", ""), questionKeywordByCode[item.code])}</h3>
             <NumericInput question={item} value={String(answers[item.code] ?? "")} onChange={(value) => handleNumericChange(item, value)} />
           </div>
         ))}
@@ -547,7 +649,7 @@ function Rq1QuestionGroup({
 
       {noReadingQuestion && (
         <div className="rq1-no-reading">
-          <h3>독서 경험이 없는 경우</h3>
+          <h3>{renderTextWithKeyword("독서 경험이 없는 경우", "독서 경험")}</h3>
           <ChoiceButtons question={noReadingQuestion} value={noReadingValue} onChange={handleNoReading} />
         </div>
       )}
@@ -633,17 +735,118 @@ function MultiChoiceButtons({ question, value, onChange }: { question: SurveyQue
   );
 }
 
-function emphasizeAllSelect(title: string) {
-  const marker = "모두 선택";
-  const index = title.indexOf(marker);
-  if (index < 0) return title;
-  return (
-    <>
-      {title.slice(0, index)}
-      <strong className="multi-choice-emphasis">{marker}</strong>
-      {title.slice(index + marker.length)}
-    </>
-  );
+const questionKeywordPhrases = [
+  "연락처 제공 여부",
+  "휴대폰 번호",
+  "주 이용 도서관",
+  "주로 이용하는 도서관 서비스",
+  "최종학력",
+  "거주지역",
+  "성별",
+  "연령",
+  "직업",
+  "도서관 월 평균 이용 횟수",
+  "연간 도서관 이용 횟수",
+  "도서관 이용 기간",
+  "누구와 함께",
+  "이용하는 목적",
+  "주된 목적",
+  "대출 서비스 월 평균 이용 횟수",
+  "연간 대출 서비스 이용 횟수",
+  "도서를 대출하는 주된 목적",
+  "지난 1년 동안 읽은 독서량",
+  "종이책",
+  "전자책",
+  "오디오북",
+  "웹소설",
+  "만화책",
+  "웹툰",
+  "책 읽기",
+  "도움 된 사항",
+  "도서관 출입",
+  "도서관 공간",
+  "도서관 시설",
+  "도서관 자료",
+  "경제적 부담",
+  "이용할 가치",
+  "만족한다",
+  "다양한 자료",
+  "다양한 주제의 자료",
+  "새로운 도서 및 정보",
+  "새로운 학습 기회",
+  "자료 이용",
+  "사서",
+  "나의 의견",
+  "도서관 서비스",
+  "프로그램",
+  "문화/여가 생활",
+  "커뮤니티 활동",
+  "세대 교류",
+  "인간관계",
+  "사회적 관계형성",
+  "책에 대한 관심",
+  "독서량",
+  "삶의 질",
+  "행복감",
+  "도서관 서비스의 혜택",
+  "지속적으로 투자를",
+].sort((left, right) => right.length - left.length);
+
+function renderQuestionTitle(question: SurveyQuestion) {
+  const ranges = highlightRangesForText(question.title, questionKeywordByCode[question.code]);
+
+  if (question.type === "multi_choice") {
+    const marker = "모두 선택";
+    const start = question.title.indexOf(marker);
+    if (start >= 0) {
+      const end = start + marker.length;
+      const overlapsKeyword = ranges.some((range) => start < range.end && end > range.start);
+      if (!overlapsKeyword) {
+        ranges.push({ start, end, className: "multi-choice-emphasis" });
+      }
+    }
+  }
+
+  if (ranges.length === 0) return question.title;
+  return renderHighlightedParts(question.title, ranges);
+}
+
+function renderTextWithKeyword(text: string, keyword?: string) {
+  const ranges = highlightRangesForText(text, keyword);
+  if (ranges.length === 0) return text;
+  return renderHighlightedParts(text, ranges);
+}
+
+function highlightRangesForText(text: string, keyword?: string) {
+  const ranges: Array<{ start: number; end: number; className: string }> = [];
+  const keywordInText = keyword && text.includes(keyword) ? keyword : questionKeywordPhrases.find((phrase) => text.includes(phrase));
+  if (keywordInText) {
+    const start = text.indexOf(keywordInText);
+    ranges.push({ start, end: start + keywordInText.length, className: "question-keyword" });
+  }
+  return ranges;
+}
+
+function renderHighlightedParts(text: string, ranges: Array<{ start: number; end: number; className: string }>) {
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  ranges
+    .sort((left, right) => left.start - right.start)
+    .forEach((range, index) => {
+      if (range.start > cursor) {
+        parts.push(text.slice(cursor, range.start));
+      }
+      parts.push(
+        <strong className={range.className} key={`${range.className}-${index}`}>
+          {text.slice(range.start, range.end)}
+        </strong>,
+      );
+      cursor = range.end;
+    });
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+  return <>{parts}</>;
 }
 
 function LikertScale({
@@ -850,7 +1053,7 @@ function TextInput({ value, onChange }: { value: string; onChange: (value: strin
 }
 
 function LongTextInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const maxLength = 1000;
+  const maxLength = 300;
 
   return (
     <label className="survey-input-label">
@@ -1001,7 +1204,7 @@ function buildPiiPayload(answers: Record<string, SurveyValue>) {
 
 function buildExportCompletion(answers: Record<string, SurveyValue>) {
   return localSurveyQuestions
-    .filter((question) => !question.pii)
+    .filter((question) => !question.pii && !question.completionExcluded)
     .reduce(
       (summary, question) => {
         const stats = exportStatsForQuestion(question, answers[question.code]);
@@ -1245,7 +1448,7 @@ function reorderUsageFrequencyQuestions(questions: SurveyQuestion[]) {
 }
 
 function shouldAutoAdvanceQuestion(question: SurveyQuestion) {
-  return question.section === "satisfaction" && ["likert_7", "likert_7_with_na", "semantic_7"].includes(question.type);
+  return ["single_choice", "likert_7", "likert_7_with_na", "semantic_7"].includes(question.type);
 }
 
 function rangeWarningForQuestion(question: SurveyQuestion, value: SurveyValue) {
@@ -1272,7 +1475,7 @@ function rangeWarningForQuestions(questions: SurveyQuestion[], answers: Record<s
 }
 
 function sectionSortIndex(section: string) {
-  const order = ["pii", "respondent", "satisfaction", "behavior", "reading", "open_text", "intro"];
+  const order = ["pii", "respondent", "satisfaction", "behavior", "reading", "local_feedback", "intro"];
   const index = order.indexOf(section);
   return index === -1 ? order.length : index;
 }

@@ -19,7 +19,7 @@
   margin-bottom: 18px;
   padding: 16px 18px;
   border-radius: 8px;
-  background: #0047FF;
+  background: #172A9C;
 }
 
 .survey-title-block span {
@@ -191,7 +191,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #0047AB;
+  background: #172A9C;
   transition: width 160ms ease;
 }
 
@@ -281,6 +281,11 @@
   line-height: 1.32;
 }
 
+.question-keyword {
+  color: #172A9C;
+  font-weight: 900;
+}
+
 .multi-choice-emphasis {
   display: inline-flex;
   align-items: center;
@@ -288,7 +293,7 @@
   padding: 2px 7px;
   color: #F8F7F4;
   border-radius: 8px;
-  background: #0047FF;
+  background: #587FFF;
   font-size: 0.82em;
   line-height: 1.25;
   white-space: nowrap;
@@ -343,9 +348,9 @@
 
 .choice-grid button.selected {
   color: #F8F7F4;
-  border-color: #0047FF;
-  background: #0047FF;
-  box-shadow: inset 0 0 0 1px #0047FF;
+  border-color: #587FFF;
+  background: #587FFF;
+  box-shadow: inset 0 0 0 1px #587FFF;
 }
 
 .choice-grid span {
@@ -390,8 +395,8 @@
 .likert-grid button.selected,
 .na-button.selected {
   color: #F8F7F4;
-  border-color: #0047FF;
-  background: #0047FF;
+  border-color: #587FFF;
+  background: #587FFF;
 }
 
 .na-button {
@@ -440,7 +445,7 @@
 .survey-input-label select:focus,
 .rank-select-row select:focus {
   outline: 3px solid #BBE1FA;
-  border-color: #0047FF;
+  border-color: #587FFF;
 }
 
 .survey-input-label small {
@@ -582,12 +587,15 @@
 }
 
 .contact-start-panel {
+  position: relative;
   display: grid;
   gap: 18px;
-  padding: 22px;
+  min-height: 194px;
+  padding: 22px 22px 18px;
   color: #F8F7F4;
   border-radius: 8px;
-  background: #0047FF;
+  overflow: hidden;
+  background: #587FFF;
 }
 
 .contact-start-copy {
@@ -596,7 +604,7 @@
 }
 
 .contact-start-copy span {
-  color: #BBE1FA;
+  color: #F8F7F4;
   font-size: 12px;
   font-weight: 900;
 }
@@ -610,7 +618,7 @@
 
 .contact-start-copy p {
   margin: 0;
-  max-width: 54ch;
+  max-width: 44ch;
   color: #F8F7F4;
   font-size: 14px;
   line-height: 1.45;
@@ -621,6 +629,8 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px 10px;
   align-items: center;
+  width: fit-content;
+  min-width: min(220px, 100%);
   padding-top: 4px;
 }
 
@@ -629,7 +639,7 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  color: #0047FF;
+  color: #587FFF;
   border-radius: 999px;
   background: #F8F7F4;
   font-size: 12px;
@@ -639,6 +649,16 @@
   color: #F8F7F4;
   font-size: 13px;
   font-weight: 850;
+}
+
+.contact-start-logo {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: clamp(76px, 24vw, 118px);
+  height: auto;
+  object-fit: contain;
+  filter: saturate(0.92);
 }
 
 .contact-consent-block {
@@ -686,7 +706,7 @@
   gap: 8px;
   width: 100%;
   padding: 0;
-  color: #0047FF;
+  color: #587FFF;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -694,17 +714,17 @@
 }
 
 .privacy-policy-toggle strong {
-  color: #0047FF;
+  color: #587FFF;
   font-size: 12px;
 }
 
 .privacy-policy-toggle svg {
-  color: #0047FF;
+  color: #587FFF;
 }
 
 .privacy-policy-note p {
   margin: 8px 0 0;
-  color: #0047FF;
+  color: #587FFF;
   font-size: 11px;
   line-height: 1.55;
 }
@@ -745,8 +765,8 @@
 
 .survey-primary-button {
   color: #ffffff;
-  border: 1px solid #0047AB;
-  background: #0047AB;
+  border: 1px solid #172A9C;
+  background: #172A9C;
 }
 
 .survey-primary-button:disabled,
@@ -773,7 +793,7 @@
   min-height: 42px;
   width: fit-content;
   padding: 0 13px;
-  color: #0047FF;
+  color: #587FFF;
   border: 1px solid #BBE1FA;
   border-radius: 8px;
   background: #ffffff;

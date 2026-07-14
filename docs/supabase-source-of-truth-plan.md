@@ -1,6 +1,6 @@
 # Supabase Source Of Truth Plan
 
-이 문서는 2026 공공도서관 서비스 성과조사 응답 저장소를 Google Sheets 중심 구조에서 Supabase 원천저장 구조로 전환하기 위한 목표 설계를 정리합니다.
+이 문서는 2026 노원구 도서관 서비스 성과조사 응답 저장소를 Google Sheets 중심 구조에서 Supabase 원천저장 구조로 전환하기 위한 목표 설계를 정리합니다.
 
 ## Direction
 

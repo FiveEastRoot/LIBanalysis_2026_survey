@@ -9,7 +9,27 @@
   NODE_VERSION = "22"
 
 [[redirects]]
-  from = "/*"
+  from = "/"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/survey*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/mockup*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/survey-mockup*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/survey-review*"
   to = "/index.html"
   status = 200
 
