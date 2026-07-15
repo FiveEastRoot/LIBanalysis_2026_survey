@@ -54,11 +54,11 @@ export default async (req: Request, context: Context) => {
   const supabaseServiceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
   const phoneEncryptionKey = getEnv("PHONE_ENCRYPTION_KEY");
   const phoneHashSecret = getEnv("PHONE_HASH_SECRET");
-  if (!supabaseUrl || !supabaseServiceRoleKey || !phoneEncryptionKey || !phoneHashSecret) {
+  const surveySchema = getEnv("SURVEY_DB_SCHEMA");
+  if (!supabaseUrl || !supabaseServiceRoleKey || !phoneEncryptionKey || !phoneHashSecret || !surveySchema) {
     return json({ ok: false, message: "제출 저장소가 아직 설정되지 않았습니다." }, 503);
   }
 
-  const surveySchema = getSurveySchema();
   const submissionLogTable = getSubmissionLogTable(surveySchema);
   const supabase = createServiceClient(supabaseUrl, supabaseServiceRoleKey, surveySchema);
   const receivedAt = new Date().toISOString();
@@ -303,10 +303,6 @@ function decodeBase64Key(value: string, name: string) {
 function getEnv(name: string) {
   const netlifyValue = typeof Netlify === "undefined" ? "" : Netlify.env.get(name);
   return netlifyValue || process.env[name] || "";
-}
-
-function getSurveySchema() {
-  return getEnv("SURVEY_DB_SCHEMA") || "public";
 }
 
 function getSubmissionLogTable(schema: string) {
