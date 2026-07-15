@@ -17,6 +17,18 @@ Survey form
        -> Dashboard views
 ```
 
+## 2026-07-15 Current Schema Routing
+
+무료 프로젝트 한도 때문에 조사 운영 DB와 대시보드 DB는 현재 같은 Supabase project를 사용하되 schema로 책임을 분리합니다.
+
+| schema | responsibility |
+| --- | --- |
+| `survey_ops` | 조사폼 제출 원천, 분석용 응답, 암호화 PII, 제출 로그 |
+| `dashboard_app` | 대시보드 계정/권한, 분석 실행/결과, 보고서 |
+| `public` | 전환 전 로컬·운영 호환 영역 |
+
+조사폼 production Netlify Function은 `SURVEY_DB_SCHEMA=survey_ops`를 사용합니다. 저장 목적지는 `survey_ops.survey_analysis_export`, `survey_ops.survey_pii`, `survey_ops.survey_submissions`입니다. 환경변수가 없는 로컬 개발 환경만 `public`을 기본값으로 사용합니다.
+
 ## Role Model
 
 관리자 페이지와 권한 분기는 조사 대시보드에서 처리합니다.
@@ -74,9 +86,11 @@ Survey form
 
 `phone_hash`에는 unique index를 설정합니다. 같은 전화번호로 다시 제출하면 DB 단계에서 거절됩니다.
 
-### `survey_submission_log`
+### `survey_submissions`
 
 현재 `Submission Log` 시트와 같은 역할입니다.
+
+현재 운영 schema에서는 `survey_ops.survey_submissions`를 사용합니다. 기존 `public.survey_submission_log`는 전환 전 호환 이름입니다.
 
 | Column | Notes |
 | --- | --- |

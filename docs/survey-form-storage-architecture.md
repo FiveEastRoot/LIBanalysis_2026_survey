@@ -23,6 +23,10 @@
 | 일반 직원 페이지 | 소속 도서관 데이터만 홈 화면에서 저장/다운로드 가능 |
 | CSV export | 분석용 파일과 개인정보 파일 분리 |
 
+## 현재 운영 schema
+
+2026-07-15 기준 임시 운영은 Supabase project `libanalysis-v2-survey` 안에서 schema를 분리합니다. 조사폼 production 제출은 `SURVEY_DB_SCHEMA=survey_ops`를 사용하며 `survey_ops.survey_analysis_export`, `survey_ops.survey_pii`, `survey_ops.survey_submissions`에 저장합니다. `public`은 환경변수가 없는 로컬 개발과 전환 전 호환 경로입니다.
+
 ## 전체 운영 구조
 
 ```mermaid

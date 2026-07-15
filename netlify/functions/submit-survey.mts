@@ -1,6 +1,6 @@
 import { createCipheriv, createHmac, randomBytes } from "node:crypto";
 import type { Config, Context } from "@netlify/functions";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 type SurveySubmission = {
   analysisPayload?: Record<string, unknown>;
@@ -58,7 +58,9 @@ export default async (req: Request, context: Context) => {
     return json({ ok: false, message: "제출 저장소가 아직 설정되지 않았습니다." }, 503);
   }
 
-  const supabase = createServiceClient(supabaseUrl, supabaseServiceRoleKey);
+  const surveySchema = getSurveySchema();
+  const submissionLogTable = getSubmissionLogTable(surveySchema);
+  const supabase = createServiceClient(supabaseUrl, supabaseServiceRoleKey, surveySchema);
   const receivedAt = new Date().toISOString();
   const requestId = context.requestId;
   const clientPath = "";
@@ -68,7 +70,7 @@ export default async (req: Request, context: Context) => {
   try {
     submission = await req.json();
   } catch {
-    await logSubmission(supabase, {
+    await logSubmission(supabase, submissionLogTable, {
       requestId,
       receivedAt,
       submittedAt: null,
@@ -84,7 +86,7 @@ export default async (req: Request, context: Context) => {
   const safeClientPath = safeString(submission.clientPath);
   const validationMessage = validateSubmission(submission);
   if (validationMessage) {
-    await logSubmission(supabase, {
+    await logSubmission(supabase, submissionLogTable, {
       requestId,
       receivedAt,
       submittedAt,
@@ -115,7 +117,7 @@ export default async (req: Request, context: Context) => {
         phoneEncryptionVersion,
       };
     } catch (error) {
-      await logSubmission(supabase, {
+      await logSubmission(supabase, submissionLogTable, {
         requestId,
         receivedAt,
         submittedAt,
@@ -143,7 +145,7 @@ export default async (req: Request, context: Context) => {
 
   if (analysisResult.error) {
     console.error("Failed to write survey analysis response", analysisResult.error);
-    await logSubmission(supabase, {
+    await logSubmission(supabase, submissionLogTable, {
       requestId,
       receivedAt,
       submittedAt,
@@ -173,7 +175,7 @@ export default async (req: Request, context: Context) => {
       await supabase.from("survey_analysis_export").delete().eq("id", analysisResult.data.id);
       const duplicate = isUniqueViolation(piiResult.error, "survey_pii_phone_hash_key");
       console.error("Failed to write survey PII response", piiResult.error);
-      await logSubmission(supabase, {
+      await logSubmission(supabase, submissionLogTable, {
         requestId,
         receivedAt,
         submittedAt,
@@ -195,7 +197,7 @@ export default async (req: Request, context: Context) => {
     }
   }
 
-  await logSubmission(supabase, {
+  await logSubmission(supabase, submissionLogTable, {
     requestId,
     receivedAt,
     submittedAt,
@@ -303,8 +305,19 @@ function getEnv(name: string) {
   return netlifyValue || process.env[name] || "";
 }
 
-function createServiceClient(supabaseUrl: string, serviceRoleKey: string) {
+function getSurveySchema() {
+  return getEnv("SURVEY_DB_SCHEMA") || "public";
+}
+
+function getSubmissionLogTable(schema: string) {
+  return schema === "survey_ops" ? "survey_submissions" : "survey_submission_log";
+}
+
+function createServiceClient(supabaseUrl: string, serviceRoleKey: string, schema: string) {
   return createClient(supabaseUrl, serviceRoleKey, {
+    db: {
+      schema,
+    },
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -313,7 +326,8 @@ function createServiceClient(supabaseUrl: string, serviceRoleKey: string) {
 }
 
 async function logSubmission(
-  supabase: SupabaseClient,
+  supabase: ReturnType<typeof createServiceClient>,
+  submissionLogTable: string,
   value: {
     requestId: string;
     receivedAt: string;
@@ -326,7 +340,7 @@ async function logSubmission(
     message: string;
   },
 ) {
-  const { error } = await supabase.from("survey_submission_log").insert({
+  const { error } = await supabase.from(submissionLogTable).insert({
     request_id: value.requestId,
     received_at: value.receivedAt,
     submitted_at: value.submittedAt,

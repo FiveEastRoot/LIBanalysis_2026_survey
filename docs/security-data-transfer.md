@@ -12,9 +12,9 @@ Netlify Function /api/submit-survey
   -> phone normalization, HMAC hash, AES-256-GCM encryption
   -> Supabase service_role insert
 Supabase
-  -> survey_analysis_export
-  -> survey_pii
-  -> survey_submission_log
+  -> survey_ops.survey_analysis_export
+  -> survey_ops.survey_pii
+  -> survey_ops.survey_submissions
 ```
 
 폼 페이지는 Supabase, Google Sheets, Apps Script로 직접 전송하지 않습니다. 응답자는 같은 Netlify 도메인의 `/api/submit-survey` 엔드포인트로만 제출하고, Netlify Function이 서버 측 환경변수에 저장된 Supabase service role key로 원천 DB에 저장합니다.
@@ -25,7 +25,10 @@ Supabase
 - Submit API: `https://libanalysis-2026-survey.netlify.app/api/submit-survey`
 - Supabase project: `libanalysis-v2-survey`
 - Supabase ref: `xerxcdneuvfoioiwhsxj`
+- Production survey schema: `survey_ops`
 - Supabase connection values are stored in Netlify production environment variables.
+
+`SURVEY_DB_SCHEMA`가 설정되지 않은 로컬/전환 전 환경에서는 `public`을 사용합니다. Production에서는 `SURVEY_DB_SCHEMA=survey_ops`로 고정하며, `public`은 호환 영역으로만 취급합니다.
 
 ## Security Controls
 
@@ -42,7 +45,7 @@ Supabase
 | Request body limit | Netlify Function rejects bodies over `900,000` bytes. | Applied |
 | Server-side payload validation | Netlify Function validates payload shape, phone number, consent value, progress fields, and allowlisted export fields. | Applied |
 | Phone protection before storage | Netlify Function converts normalized phone number to `phone_hash` and `phone_encrypted` before DB insert. | Applied |
-| PII separation | Analysis answers are stored in `survey_analysis_export`; consent and encrypted/hash phone fields are stored in `survey_pii`; operational events are stored in `survey_submission_log`. | Applied |
+| PII separation | Analysis answers are stored in `survey_ops.survey_analysis_export`; consent and encrypted/hash phone fields are stored in `survey_ops.survey_pii`; operational events are stored in `survey_ops.survey_submissions`. | Applied |
 | Duplicate submission guard | Phone-consented submissions are rejected by `survey_pii.phone_hash` unique constraint. Phone-unconsented submissions are only soft-blocked in the same browser by localStorage. | Applied |
 | Plain phone exclusion | Supabase and Google Sheets backup store no raw phone number. | Applied |
 | Response caching | Netlify Function responses include `Cache-Control: no-store`. | Applied |
@@ -65,9 +68,9 @@ The Netlify Function performs the server-side gate:
 
 | Table | Purpose | PII included |
 | --- | --- | --- |
-| `survey_analysis_export` | Analysis-ready survey response values | No phone number |
-| `survey_pii` | Consent, phone hash, encrypted phone value, encryption version | Encrypted only |
-| `survey_submission_log` | Request ID, timestamps, progress, client path, user agent, event type | No phone number |
+| `survey_ops.survey_analysis_export` | Analysis-ready survey response values | No phone number |
+| `survey_ops.survey_pii` | Consent, phone hash, encrypted phone value, encryption version | Encrypted only |
+| `survey_ops.survey_submissions` | Request ID, timestamps, progress, client path, user agent, event type | No phone number |
 
 Analysis is planned as a file-upload workflow. The analysis program should use Analysis CSV exports only and should not receive PII exports.
 
@@ -77,9 +80,9 @@ Phone decryption is a separate local operator workflow documented in `docs/phone
 
 Google Sheets backup is a later administrator action, not the live submission path. When backup is implemented, it should read from Supabase and preserve the same separation:
 
-- Analysis data from `survey_analysis_export`
-- PII data from `survey_pii`
-- Operational logs from `survey_submission_log` or `admin_export_log`
+- Analysis data from `survey_ops.survey_analysis_export`
+- PII data from `survey_ops.survey_pii`
+- Operational logs from `survey_ops.survey_submissions` or `survey_ops.admin_export_log`
 
 ## Remaining Security Considerations
 

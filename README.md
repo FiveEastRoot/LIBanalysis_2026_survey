@@ -54,6 +54,9 @@ Supabase 원천저장 및 관리자 대시보드 연계 목표 구조는 [docs/s
    - Execute as: 본인
    - Who has access: Anyone
 5. Netlify 환경변수에 아래 값을 저장합니다.
+   - `SUPABASE_URL`: 조사 운영 Supabase 프로젝트 URL
+   - `SUPABASE_SERVICE_ROLE_KEY`: 서버 함수 전용 service role key
+   - `SURVEY_DB_SCHEMA`: 운영은 `survey_ops`, 로컬 호환 기본값은 `public`
    - `SHEETS_WEBHOOK_URL`: Apps Script Web App `/exec` URL
    - `SHEETS_WEBHOOK_SECRET`: Apps Script 프로젝트 속성과 같은 값
    - `PHONE_ENCRYPTION_KEY`: base64 인코딩된 32바이트 암호화 키
