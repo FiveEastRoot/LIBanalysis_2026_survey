@@ -267,6 +267,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+  min-height: 104px;
 }
 
 .survey-question-title > svg {
@@ -897,6 +898,10 @@
   .survey-question-panel {
     min-height: auto;
     padding: 16px;
+  }
+
+  .survey-question-title {
+    min-height: 118px;
   }
 
   .survey-question h2 {
