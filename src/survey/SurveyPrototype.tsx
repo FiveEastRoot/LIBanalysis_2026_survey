@@ -493,7 +493,7 @@ function QuestionField({
   }
 
   return (
-    <div className={`survey-question ${question.type === "multi_choice" ? "multi-choice-page" : ""}`}>
+    <div className={`survey-question ${question.type === "multi_choice" ? "multi-choice-page" : ""} ${isScaleQuestion(question) ? "scale-question" : ""}`}>
       <div className="survey-question-title">
         {iconForQuestion(question)}
         <div>
@@ -1449,6 +1449,10 @@ function reorderUsageFrequencyQuestions(questions: SurveyQuestion[]) {
 
 function shouldAutoAdvanceQuestion(question: SurveyQuestion) {
   return ["single_choice", "likert_7", "likert_7_with_na", "semantic_7"].includes(question.type);
+}
+
+function isScaleQuestion(question: SurveyQuestion) {
+  return ["likert_7", "likert_7_with_na", "semantic_7"].includes(question.type);
 }
 
 function rangeWarningForQuestion(question: SurveyQuestion, value: SurveyValue) {

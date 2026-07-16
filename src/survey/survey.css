@@ -267,6 +267,9 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+}
+
+.scale-question .survey-question-title {
   min-height: 104px;
 }
 
@@ -900,7 +903,7 @@
     padding: 16px;
   }
 
-  .survey-question-title {
+  .scale-question .survey-question-title {
     min-height: 118px;
   }
 
