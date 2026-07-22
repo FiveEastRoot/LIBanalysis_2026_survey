@@ -7,13 +7,18 @@ type SurveySubmission = {
   piiPayload?: Record<string, unknown>;
   completedFields?: number;
   totalFields?: number;
+  responseDurationMs?: number;
+  responseSource?: string;
+  offlineEntryId?: string;
   submittedAt?: string;
   clientPath?: string;
 };
 
 const maxBodyBytes = 900_000;
-const consentValue = "취급위탁에 동의";
+const consentValue = "개인정보 수집·이용 동의";
+const legacyConsentValue = "취급위탁에 동의";
 const noConsentValue = "동의하지 않음(경품지급불가)";
+const storedConsentValue = "agree";
 const phoneEncryptionVersion = "v1";
 const allowedAnalysisFields = new Set([
   "SQ1", "SQ2", "SQ3", "SQ3-DONG", "SQ4", "SQ5", "BQ1", "BQ2",
@@ -34,20 +39,32 @@ const allowedAnalysisFields = new Set([
   "NW-OE-1",
 ]);
 const allowedPiiFields = new Set(["P1-EXCLUDE", "P2-EXCLUDE"]);
+const optionalAnalysisFields = new Set(["NW-OE-1", "RQ1-7"]);
+const rq1NumericFields = ["RQ1-1", "RQ1-2", "RQ1-3", "RQ1-4", "RQ1-5", "RQ1-6"];
 
 export default async (req: Request, context: Context) => {
+  const requestId = context.requestId;
+
   if (req.method !== "POST") {
-    return json({ ok: false, message: "Method not allowed" }, 405);
+    return json({ ok: false, code: "ERR_METHOD_NOT_ALLOWED", message: "Method not allowed", requestId }, 405);
   }
 
   const contentType = req.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
-    return json({ ok: false, message: "JSON 요청만 허용됩니다." }, 415);
+    return json({ ok: false, code: "ERR_UNSUPPORTED_CONTENT_TYPE", message: "JSON 요청만 허용됩니다.", requestId }, 415);
   }
 
   const contentLength = Number(req.headers.get("content-length") ?? "0");
   if (contentLength > maxBodyBytes) {
-    return json({ ok: false, message: "제출 데이터가 허용 크기를 초과했습니다." }, 413);
+    return json({ ok: false, code: "ERR_BODY_TOO_LARGE", message: "제출 데이터가 허용 크기를 초과했습니다.", requestId }, 413);
+  }
+
+  if (isTruthyEnv("SURVEY_MAINTENANCE_MODE")) {
+    return json({ ok: false, code: "ERR_SERVICE_MAINTENANCE", message: "현재 설문 저장 서버 점검 중입니다.", requestId }, 503);
+  }
+
+  if (isTruthyEnv("SURVEY_SUBMISSIONS_DISABLED")) {
+    return json({ ok: false, code: "ERR_SUBMISSION_BLOCKED", message: "현재 제출이 일시 차단되어 있습니다.", requestId }, 423);
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL");
@@ -55,14 +72,16 @@ export default async (req: Request, context: Context) => {
   const phoneEncryptionKey = getEnv("PHONE_ENCRYPTION_KEY");
   const phoneHashSecret = getEnv("PHONE_HASH_SECRET");
   const surveySchema = getEnv("SURVEY_DB_SCHEMA");
-  if (!supabaseUrl || !supabaseServiceRoleKey || !phoneEncryptionKey || !phoneHashSecret || !surveySchema) {
-    return json({ ok: false, message: "제출 저장소가 아직 설정되지 않았습니다." }, 503);
+  const sourceDistrictCode = getEnv("SURVEY_SOURCE_DISTRICT_CODE").trim();
+  const sourceLibraryCode = getEnv("SURVEY_SOURCE_LIBRARY_CODE").trim();
+  const sourceCampaignId = getEnv("SURVEY_SOURCE_CAMPAIGN_ID").trim();
+  if (!supabaseUrl || !supabaseServiceRoleKey || !phoneEncryptionKey || !phoneHashSecret || !surveySchema || !sourceDistrictCode || !sourceCampaignId) {
+    return json({ ok: false, code: "ERR_STORAGE_NOT_CONFIGURED", message: "제출 저장소가 아직 설정되지 않았습니다.", requestId }, 503);
   }
 
   const submissionLogTable = getSubmissionLogTable(surveySchema);
   const supabase = createServiceClient(supabaseUrl, supabaseServiceRoleKey, surveySchema);
   const receivedAt = new Date().toISOString();
-  const requestId = context.requestId;
   const clientPath = "";
   const userAgent = req.headers.get("user-agent") ?? "";
 
@@ -76,16 +95,19 @@ export default async (req: Request, context: Context) => {
       submittedAt: null,
       clientPath,
       userAgent,
-      eventType: "validation_failed",
-      message: "invalid_json_body",
+      eventType: "error",
+      message: "ERR_INVALID_JSON: invalid_json_body",
     });
-    return json({ ok: false, message: "요청 본문을 읽을 수 없습니다." }, 400);
+    return json({ ok: false, code: "ERR_INVALID_JSON", message: "요청 본문을 읽을 수 없습니다.", requestId }, 400);
   }
 
   const submittedAt = safeSubmittedAt(submission.submittedAt);
   const safeClientPath = safeString(submission.clientPath);
-  const validationMessage = validateSubmission(submission);
-  if (validationMessage) {
+  const responseDurationMs = safeResponseDurationMs(submission.responseDurationMs);
+  const responseSource = safeResponseSource(submission.responseSource, safeClientPath);
+  const offlineEntryId = safeOfflineEntryId(submission.offlineEntryId, responseSource);
+  const validationResult = validateSubmission(submission);
+  if (validationResult.ok === false) {
     await logSubmission(supabase, submissionLogTable, {
       requestId,
       receivedAt,
@@ -94,13 +116,55 @@ export default async (req: Request, context: Context) => {
       totalFields: submission.totalFields,
       clientPath: safeClientPath,
       userAgent,
-      eventType: "validation_failed",
-      message: validationMessage,
+      eventType: "error",
+      message: messageWithMetadata(`${validationResult.code}: ${validationResult.message}`, responseDurationMs, responseSource, offlineEntryId),
     });
-    return json({ ok: false, message: validationMessage }, 400);
+    return json({ ok: false, code: validationResult.code, message: validationResult.message, missingFields: validationResult.missingFields, requestId }, 400);
   }
 
-  const phoneConsent = String(submission.piiPayload?.["P1-EXCLUDE"] ?? "") === consentValue;
+  let sourceScope: SurveySourceScope;
+  try {
+    sourceScope = await resolveSurveySourceScope(supabase, {
+      districtCode: sourceDistrictCode,
+      libraryCode: sourceLibraryCode,
+      campaignId: sourceCampaignId,
+    });
+  } catch (error) {
+    const sourceMessage = error instanceof Error ? error.message : "source_scope_resolution_failed";
+    await logSubmission(supabase, submissionLogTable, {
+      requestId,
+      receivedAt,
+      submittedAt,
+      completedFields: submission.completedFields,
+      totalFields: submission.totalFields,
+      clientPath: safeClientPath,
+      userAgent,
+      eventType: "error",
+      message: messageWithMetadata(`ERR_SOURCE_SCOPE_CONFIG: ${sourceMessage}`, responseDurationMs, responseSource, offlineEntryId),
+    });
+    return json({ ok: false, code: "ERR_SOURCE_SCOPE_CONFIG", message: "조사 출처 설정을 확인할 수 없습니다.", requestId }, 503);
+  }
+
+  let analysisScope: MainLibraryAnalysisScope;
+  try {
+    analysisScope = await resolveMainLibraryAnalysisScope(supabase, submission.analysisPayload?.SQ4);
+  } catch (error) {
+    const analysisScopeMessage = error instanceof Error ? error.message : "main_library_mapping_failed";
+    await logSubmission(supabase, submissionLogTable, {
+      requestId,
+      receivedAt,
+      submittedAt,
+      completedFields: submission.completedFields,
+      totalFields: submission.totalFields,
+      clientPath: safeClientPath,
+      userAgent,
+      eventType: "error",
+      message: messageWithMetadata(`ERR_MAIN_LIBRARY_MAPPING: ${analysisScopeMessage}`, responseDurationMs, responseSource, offlineEntryId),
+    });
+    return json({ ok: false, code: "ERR_MAIN_LIBRARY_MAPPING", message: "주 이용도서관을 운영 기준정보와 매칭할 수 없습니다.", requestId }, 400);
+  }
+
+  const phoneConsent = isPhoneConsentValue(submission.piiPayload?.["P1-EXCLUDE"]);
   let protectedPiiPayload: {
     consentValue: string;
     phoneHash: string;
@@ -111,7 +175,7 @@ export default async (req: Request, context: Context) => {
     try {
       const normalizedPhoneValue = normalizedPhone(submission.piiPayload?.["P2-EXCLUDE"]);
       protectedPiiPayload = {
-        consentValue,
+        consentValue: storedConsentValue,
         phoneHash: hashPhone(normalizedPhoneValue, phoneHashSecret),
         phoneEncrypted: encryptPhone(normalizedPhoneValue, phoneEncryptionKey),
         phoneEncryptionVersion,
@@ -125,10 +189,10 @@ export default async (req: Request, context: Context) => {
         totalFields: submission.totalFields,
         clientPath: safeClientPath,
         userAgent,
-        eventType: "storage_failed",
-        message: error instanceof Error ? error.message : "phone_encryption_failed",
+        eventType: "error",
+        message: messageWithMetadata(`ERR_PHONE_ENCRYPTION_CONFIG: ${error instanceof Error ? error.message : "phone_encryption_failed"}`, responseDurationMs, responseSource, offlineEntryId),
       });
-      return json({ ok: false, message: "전화번호 암호화 설정이 올바르지 않습니다." }, 503);
+      return json({ ok: false, code: "ERR_PHONE_ENCRYPTION_CONFIG", message: "전화번호 암호화 설정이 올바르지 않습니다.", requestId }, 503);
     }
   }
 
@@ -139,6 +203,10 @@ export default async (req: Request, context: Context) => {
       received_at: receivedAt,
       submitted_at: submittedAt,
       analysis_payload: submission.analysisPayload,
+      source_district_id: sourceScope.districtId,
+      source_library_id: sourceScope.libraryId,
+      source_campaign_id: sourceScope.campaignId,
+      analysis_library_id: analysisScope.libraryId,
     })
     .select("id")
     .single();
@@ -153,10 +221,10 @@ export default async (req: Request, context: Context) => {
       totalFields: submission.totalFields,
       clientPath: safeClientPath,
       userAgent,
-      eventType: "storage_failed",
-      message: analysisResult.error.message,
+      eventType: "error",
+      message: messageWithMetadata(`ERR_ANALYSIS_WRITE_FAILED: ${analysisResult.error.message}`, responseDurationMs, responseSource, offlineEntryId),
     });
-    return json({ ok: false, message: "응답 저장에 실패했습니다." }, 502);
+    return json({ ok: false, code: "ERR_ANALYSIS_WRITE_FAILED", message: "응답 저장에 실패했습니다.", requestId }, 502);
   }
 
   if (protectedPiiPayload) {
@@ -173,7 +241,7 @@ export default async (req: Request, context: Context) => {
 
     if (piiResult.error) {
       await supabase.from("survey_analysis_export").delete().eq("id", analysisResult.data.id);
-      const duplicate = isUniqueViolation(piiResult.error, "survey_pii_phone_hash_key");
+      const duplicate = isUniqueViolation(piiResult.error, ["survey_pii_phone_hash_key", "idx_survey_ops_pii_phone_hash_unique"]);
       console.error("Failed to write survey PII response", piiResult.error);
       await logSubmission(supabase, submissionLogTable, {
         requestId,
@@ -183,14 +251,16 @@ export default async (req: Request, context: Context) => {
         totalFields: submission.totalFields,
         clientPath: safeClientPath,
         userAgent,
-        eventType: duplicate ? "duplicate_rejected" : "storage_failed",
-        message: piiResult.error.message,
+        eventType: duplicate ? "blocked_duplicate" : "error",
+        message: messageWithMetadata(`${duplicate ? "ERR_PII_DUPLICATE" : "ERR_PII_WRITE_FAILED"}: ${piiResult.error.message}`, responseDurationMs, responseSource, offlineEntryId),
       });
       return json(
         {
           ok: false,
           duplicate,
+          code: duplicate ? "ERR_PII_DUPLICATE" : "ERR_PII_WRITE_FAILED",
           message: duplicate ? "이미 제출된 전화번호입니다." : "개인정보 저장에 실패했습니다.",
+          requestId,
         },
         duplicate ? 409 : 502,
       );
@@ -206,10 +276,10 @@ export default async (req: Request, context: Context) => {
     clientPath: safeClientPath,
     userAgent,
     eventType: "submitted",
-    message: phoneConsent ? "submitted" : "submitted_without_phone_consent",
+    message: messageWithMetadata(phoneConsent ? "submitted" : "submitted_without_phone_consent", responseDurationMs, responseSource, offlineEntryId),
   });
 
-  return json({ ok: true, requestId, phoneConsent });
+  return json({ ok: true, code: "OK_SUBMITTED", requestId, phoneConsent });
 };
 
 export const config: Config = {
@@ -218,28 +288,61 @@ export const config: Config = {
 
 function validateSubmission(submission: SurveySubmission) {
   if (!isRecord(submission.analysisPayload) || !isRecord(submission.piiPayload)) {
-    return "제출 데이터 형식이 올바르지 않습니다.";
+    return validationError("ERR_PAYLOAD_SHAPE", "제출 데이터 형식이 올바르지 않습니다.");
   }
 
   if (hasUnknownKeys(submission.analysisPayload, allowedAnalysisFields) || hasUnknownKeys(submission.piiPayload, allowedPiiFields)) {
-    return "허용되지 않은 제출 항목이 포함되어 있습니다.";
+    return validationError("ERR_UNKNOWN_FIELDS", "허용되지 않은 제출 항목이 포함되어 있습니다.");
+  }
+
+  const missingFields = requiredMissingFields(submission.analysisPayload);
+  if (missingFields.length > 0) {
+    return validationError("ERR_REQUIRED_FIELDS_MISSING", "필수 응답이 누락되었습니다.", missingFields);
   }
 
   const consent = String(submission.piiPayload["P1-EXCLUDE"] ?? "");
-  if (consent !== consentValue && consent !== noConsentValue) {
-    return "개인정보 취급위탁 동의 여부를 선택해 주세요.";
+  if (!isPhoneConsentValue(consent) && consent !== noConsentValue) {
+    return validationError("ERR_PII_CONSENT_REQUIRED", "개인정보 수집·이용 동의 여부를 선택해 주세요.");
   }
 
   const phone = normalizedPhone(submission.piiPayload["P2-EXCLUDE"]);
-  if (consent === consentValue && !/^\d{11}$/.test(phone)) {
-    return "휴대폰 번호는 숫자 11자리여야 합니다.";
+  if (isPhoneConsentValue(consent) && !/^\d{11}$/.test(phone)) {
+    return validationError("ERR_PHONE_INVALID", "휴대폰 번호는 숫자 11자리여야 합니다.");
   }
 
   if (typeof submission.completedFields !== "number" || typeof submission.totalFields !== "number") {
-    return "진행도 정보가 올바르지 않습니다.";
+    return validationError("ERR_PROGRESS_INVALID", "진행도 정보가 올바르지 않습니다.");
   }
 
-  return "";
+  return { ok: true as const };
+}
+
+function validationError(code: string, message: string, missingFields?: string[]) {
+  return { ok: false as const, code, message, missingFields };
+}
+
+function requiredMissingFields(payload: Record<string, unknown>) {
+  const missing = Array.from(allowedAnalysisFields).filter((key) => {
+    if (optionalAnalysisFields.has(key)) return false;
+    return !isFilledPayloadValue(payload[key]);
+  });
+
+  if (!isFilledPayloadValue(payload["RQ1-7"]) && rq1NumericFields.every((key) => !isFilledPayloadValue(payload[key]))) {
+    missing.push("RQ1");
+  }
+
+  return missing;
+}
+
+function isFilledPayloadValue(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  return String(value ?? "").trim() !== "";
+}
+
+function isPhoneConsentValue(value: unknown) {
+  const normalized = String(value ?? "");
+  return normalized === consentValue || normalized === legacyConsentValue;
 }
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -268,6 +371,136 @@ function safeSubmittedAt(value: unknown) {
   if (typeof value !== "string") return null;
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
+}
+
+function safeResponseDurationMs(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  if (rounded < 0 || rounded > 86_400_000) return null;
+  return rounded;
+}
+
+function messageWithMetadata(message: string, responseDurationMs: number | null, responseSource: "online" | "offline_entry" | "test", offlineEntryId: string) {
+  const metadata = [`source=${responseSource}`];
+  if (offlineEntryId) {
+    metadata.push(`offline_entry_id=${offlineEntryId}`);
+  }
+  if (responseDurationMs !== null) {
+    metadata.push(`duration_ms=${responseDurationMs}`);
+  }
+  return `${message}; ${metadata.join("; ")}`;
+}
+
+function safeResponseSource(value: unknown, clientPath: string): "online" | "offline_entry" | "test" {
+  if (value === "offline_entry" || clientPath.startsWith("/survey-offline-entry")) return "offline_entry";
+  if (value === "test") return "test";
+  return "online";
+}
+
+function safeOfflineEntryId(value: unknown, responseSource: "online" | "offline_entry" | "test") {
+  if (responseSource !== "offline_entry" || typeof value !== "string") return "";
+  return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32).toUpperCase();
+}
+
+type SurveySourceScope = {
+  districtId: string;
+  libraryId: string | null;
+  campaignId: string;
+};
+
+type MainLibraryAnalysisScope = {
+  districtId: string;
+  libraryId: string;
+  officialCode: string;
+};
+
+async function resolveMainLibraryAnalysisScope(
+  supabase: ReturnType<typeof createServiceClient>,
+  value: unknown,
+): Promise<MainLibraryAnalysisScope> {
+  const mainLibrary = String(value ?? "").trim();
+  if (!mainLibrary) throw new Error("main_library_required");
+
+  let query = supabase
+    .from("libraries")
+    .select("id, district_id, official_code")
+    .eq("is_active", true)
+    .limit(2);
+  query = /^[0-9]{6}$/.test(mainLibrary)
+    ? query.eq("official_code", mainLibrary)
+    : query.eq("name", mainLibrary);
+
+  const { data: libraries, error: libraryError } = await query;
+  if (libraryError) throw new Error("main_library_lookup_failed");
+  if ((libraries?.length ?? 0) !== 1 || !libraries![0].official_code) {
+    throw new Error("main_library_not_unique_or_inactive");
+  }
+
+  const districtId = String(libraries![0].district_id);
+  const { data: districts, error: districtError } = await supabase
+    .from("districts")
+    .select("id")
+    .eq("id", districtId)
+    .eq("is_active", true)
+    .limit(2);
+  if (districtError) throw new Error("analysis_district_lookup_failed");
+  if ((districts?.length ?? 0) !== 1) throw new Error("analysis_district_inactive");
+
+  return {
+    districtId,
+    libraryId: String(libraries![0].id),
+    officialCode: String(libraries![0].official_code),
+  };
+}
+
+async function resolveSurveySourceScope(
+  supabase: ReturnType<typeof createServiceClient>,
+  config: { districtCode: string; libraryCode: string; campaignId: string },
+): Promise<SurveySourceScope> {
+  const districtCode = validatedSourceCode(config.districtCode, "SURVEY_SOURCE_DISTRICT_CODE");
+  const libraryCode = config.libraryCode ? validatedSourceCode(config.libraryCode, "SURVEY_SOURCE_LIBRARY_CODE") : "";
+  const campaignId = validatedCampaignId(config.campaignId);
+
+  const { data: districts, error: districtError } = await supabase
+    .from("districts")
+    .select("id, code")
+    .eq("code", districtCode)
+    .eq("is_active", true)
+    .limit(2);
+  if (districtError) throw new Error("district_lookup_failed");
+  if ((districts?.length ?? 0) !== 1) throw new Error("district_code_not_unique_or_inactive");
+  const districtId = String(districts![0].id);
+
+  if (!libraryCode) {
+    return { districtId, libraryId: null, campaignId };
+  }
+
+  const { data: libraries, error: libraryError } = await supabase
+    .from("libraries")
+    .select("id, code, district_id")
+    .eq("district_id", districtId)
+    .eq("code", libraryCode)
+    .eq("is_active", true)
+    .limit(2);
+  if (libraryError) throw new Error("library_lookup_failed");
+  if ((libraries?.length ?? 0) !== 1) throw new Error("library_code_not_unique_in_district_or_inactive");
+  return { districtId, libraryId: String(libraries![0].id), campaignId };
+}
+
+function validatedSourceCode(value: string, name: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(normalized)) {
+    throw new Error(`${name.toLowerCase()}_invalid`);
+  }
+  return normalized;
+}
+
+function validatedCampaignId(value: string) {
+  const normalized = value.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(normalized)) {
+    throw new Error("survey_source_campaign_id_invalid");
+  }
+  return normalized;
 }
 
 function normalizedPhone(value: unknown) {
@@ -332,7 +565,7 @@ async function logSubmission(
     totalFields?: number;
     clientPath: string;
     userAgent: string;
-    eventType: "submitted" | "duplicate_rejected" | "validation_failed" | "storage_failed";
+    eventType: "submitted" | "blocked_duplicate" | "error";
     message: string;
   },
 ) {
@@ -352,7 +585,11 @@ async function logSubmission(
   }
 }
 
-function isUniqueViolation(error: { code?: string; message?: string; details?: string }, constraintName: string) {
+function isUniqueViolation(error: { code?: string; message?: string; details?: string }, constraintNames: string[]) {
   const text = `${error.message ?? ""} ${error.details ?? ""}`;
-  return error.code === "23505" && text.includes(constraintName);
+  return error.code === "23505" && constraintNames.some((constraintName) => text.includes(constraintName));
+}
+
+function isTruthyEnv(name: string) {
+  return ["1", "true", "yes", "on"].includes(getEnv(name).toLowerCase());
 }

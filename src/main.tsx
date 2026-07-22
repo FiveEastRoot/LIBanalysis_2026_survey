@@ -20,6 +20,10 @@ function SurveyApp() {
     return <WebSurveySample />;
   }
 
+  if (path.startsWith("/survey-offline-entry")) {
+    return <SurveyPrototype entryMode="offline_entry" />;
+  }
+
   return <SurveyPrototype />;
 }
 

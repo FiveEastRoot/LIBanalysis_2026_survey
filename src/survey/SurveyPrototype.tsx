@@ -38,6 +38,7 @@ export type SurveyExportSnapshot = {
 
 type SurveyPrototypeProps = {
   onExportSnapshotChange?: (snapshot: SurveyExportSnapshot) => void;
+  entryMode?: "online" | "offline_entry";
   showModeLink?: boolean;
 };
 
@@ -71,9 +72,8 @@ const surveyQuestions = reorderUsageFrequencyQuestions([
 ]);
 
 const submittedPhoneStorageKey = "libanalysis-survey-submitted-phones";
-const submittedAnonymousStorageKey = "libanalysis-survey-submitted-anonymous";
 const samplePhoneValue = "01012345678";
-const phoneConsentValue = "취급위탁에 동의";
+const phoneConsentValue = "개인정보 수집·이용 동의";
 const phoneNoConsentValue = "동의하지 않음(경품지급불가)";
 const surveyTitle = "2026 노원구 도서관 서비스 성과조사";
 const questionKeywordByCode: Partial<Record<string, string>> = {
@@ -169,12 +169,16 @@ const questionKeywordByCode: Partial<Record<string, string>> = {
   "RQ3": "도움 된 사항",
 };
 
-export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }: SurveyPrototypeProps = {}) {
+export function SurveyPrototype({ onExportSnapshotChange, entryMode = "online", showModeLink = false }: SurveyPrototypeProps = {}) {
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [answers, setAnswers] = React.useState<Record<string, SurveyValue>>(initialAnswers);
+  const [offlineEntryId, setOfflineEntryId] = React.useState("");
   const [progressExpanded, setProgressExpanded] = React.useState(false);
   const [submitMessage, setSubmitMessage] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isSubmitted, setIsSubmitted] = React.useState(false);
+  const submitLockRef = React.useRef(false);
+  const surveyStartedAtRef = React.useRef(Date.now());
   const question = surveyQuestions[currentIndex];
   const analysisPayload = React.useMemo(() => buildAnalysisPayload(answers), [answers]);
   const piiPayload = React.useMemo(() => buildPiiPayload(answers), [answers]);
@@ -214,10 +218,6 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
 
   function handleContactConsentChange(value: string) {
     if (value === phoneNoConsentValue) {
-      if (hasSubmittedAnonymous()) {
-        setSubmitMessage("이 브라우저에서는 이미 전화번호 미입력 제출이 완료되었습니다.");
-        return;
-      }
       setSubmitMessage("");
       setAnswers((current) => ({ ...current, "P1-EXCLUDE": value, "P2-EXCLUDE": "" }));
       setCurrentIndex((index) => nextVisibleQuestionIndex(index, { ...answers, "P1-EXCLUDE": value, "P2-EXCLUDE": "" }));
@@ -229,18 +229,19 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
 
   function goNext() {
     if (question.code === "P2-EXCLUDE" && !String(answers["P1-EXCLUDE"] ?? "").trim()) {
-      setSubmitMessage("개인정보 취급위탁 동의 여부를 선택해 주세요.");
+      setSubmitMessage("개인정보 수집·이용 동의 여부를 선택해 주세요.");
       return;
     }
     if (question.code === "P2-EXCLUDE" && hasPhoneConsent(answers) && !isValidPhone(answers["P2-EXCLUDE"])) {
       setSubmitMessage(isSamplePhone(answers["P2-EXCLUDE"]) ? "예시 번호는 사용할 수 없습니다. 실제 휴대폰 번호를 입력해 주세요." : "휴대폰 번호는 숫자 11자리로 입력해 주세요.");
       return;
     }
-    if (question.code === "P2-EXCLUDE" && !hasPhoneConsent(answers) && hasSubmittedAnonymous()) {
-      setSubmitMessage("이 브라우저에서는 이미 전화번호 미입력 제출이 완료되었습니다.");
+    const nextAnswers = fillEmptyDirectInputsOnPage(pageQuestions, answers);
+    const requiredWarning = requiredWarningForQuestions(pageQuestions, nextAnswers);
+    if (requiredWarning) {
+      setSubmitMessage(requiredWarning);
       return;
     }
-    const nextAnswers = fillEmptyDirectInputsOnPage(pageQuestions, answers);
     const rangeWarning = rangeWarningForQuestions(pageQuestions, nextAnswers);
     if (rangeWarning) {
       setSubmitMessage(rangeWarning);
@@ -258,10 +259,13 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
   }
 
   async function handleSubmit() {
+    if (submitLockRef.current || isSubmitted) {
+      return;
+    }
     const phone = normalizedPhone(answers["P2-EXCLUDE"]);
     const phoneConsent = hasPhoneConsent(answers);
     if (!String(answers["P1-EXCLUDE"] ?? "").trim()) {
-      setSubmitMessage("개인정보 취급위탁 동의 여부를 선택해 주세요.");
+      setSubmitMessage("개인정보 수집·이용 동의 여부를 선택해 주세요.");
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
     }
@@ -270,24 +274,50 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
     }
-    if (!phoneConsent && hasSubmittedAnonymous()) {
-      setSubmitMessage("이 브라우저에서는 이미 전화번호 미입력 제출이 완료되었습니다.");
-      setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
-      return;
-    }
     if (phoneConsent && hasSubmittedPhone(phone)) {
       setSubmitMessage("이미 제출이 완료된 휴대폰 번호입니다. 같은 번호로는 다시 제출할 수 없습니다.");
       setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
       return;
     }
+    const finalAnswers = fillEmptyDirectInputsAcrossSurvey(answers);
+    const firstInvalidIndex = findFirstInvalidRequiredQuestionIndex(finalAnswers);
+    if (firstInvalidIndex >= 0) {
+      const firstInvalidQuestion = surveyQuestions[firstInvalidIndex];
+      setSubmitMessage(requiredWarningForQuestions(questionsForPage(firstInvalidQuestion), finalAnswers));
+      setCurrentIndex(firstInvalidIndex);
+      if (finalAnswers !== answers) {
+        setAnswers(finalAnswers);
+      }
+      return;
+    }
+    const finalRangeWarning = rangeWarningForQuestions(surveyQuestions, finalAnswers);
+    if (finalRangeWarning) {
+      setSubmitMessage(finalRangeWarning);
+      const targetIndex = surveyQuestions.findIndex((item) => finalRangeWarning.startsWith(item.title));
+      if (targetIndex >= 0) {
+        setCurrentIndex(targetIndex);
+      }
+      if (finalAnswers !== answers) {
+        setAnswers(finalAnswers);
+      }
+      return;
+    }
+    if (finalAnswers !== answers) {
+      setAnswers(finalAnswers);
+    }
+    submitLockRef.current = true;
     setIsSubmitting(true);
     setSubmitMessage("제출 중입니다. 잠시만 기다려 주세요.");
+    let completed = false;
     try {
       const response = await submitSurveyResponse({
-        analysisPayload,
-        piiPayload,
-        completedFields: exportCompletion.completedFields,
-        totalFields: exportCompletion.totalFields,
+        analysisPayload: buildAnalysisPayload(finalAnswers),
+        piiPayload: buildPiiPayload(finalAnswers),
+        completedFields: buildExportCompletion(finalAnswers).completedFields,
+        totalFields: buildExportCompletion(finalAnswers).totalFields,
+        responseDurationMs: Date.now() - surveyStartedAtRef.current,
+        responseSource: entryMode,
+        offlineEntryId: entryMode === "offline_entry" ? offlineEntryId : "",
       });
       if (!response.ok) {
         if (response.duplicate) {
@@ -295,19 +325,23 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
           setCurrentIndex(surveyQuestions.findIndex((item) => item.code === "P2-EXCLUDE"));
           return;
         }
-        setSubmitMessage(response.message || "제출 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+        setSubmitMessage(submissionFailureMessage(response));
         return;
       }
       if (phoneConsent) {
         saveSubmittedPhone(phone);
         setSubmitMessage("제출이 완료되었습니다. 같은 휴대폰 번호로는 다시 제출할 수 없습니다.");
       } else {
-        saveSubmittedAnonymous();
-        setSubmitMessage("제출이 완료되었습니다. 이 브라우저에서는 다시 제출할 수 없습니다.");
+        setSubmitMessage("제출이 완료되었습니다.");
       }
+      completed = true;
+      setIsSubmitted(true);
     } catch {
       setSubmitMessage("네트워크 오류로 제출하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.");
     } finally {
+      if (!completed) {
+        submitLockRef.current = false;
+      }
       setIsSubmitting(false);
     }
   }
@@ -382,65 +416,75 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
         )}
 
         <section className="survey-question-panel" onKeyDown={handleQuestionKeyDown}>
-          {/* <div className="survey-question-meta">
-            <span>{sectionLabels[question.section]}</span>
-            {question.section !== "pii" && <strong>{question.code}</strong>}
-          </div> */}
-          {question.code === "P2-EXCLUDE" ? (
-            <ContactVerificationPage
-              phoneValue={String(answers["P2-EXCLUDE"] ?? "")}
-              consentValue={String(answers["P1-EXCLUDE"] ?? "")}
-              onPhoneChange={(value) => updateAnswer("P2-EXCLUDE", value)}
-              onConsentChange={handleContactConsentChange}
-            />
+          {isSubmitted ? (
+            <SubmissionCompletePage />
           ) : (
-            isRq1Question(question) ? (
-              <Rq1QuestionGroup
-                questions={pageQuestions}
-                answers={answers}
-                onChange={updateAnswer}
-                onBatchChange={updateAnswers}
-              />
-            ) : (
-              <QuestionField
-                question={question}
-                value={answers[question.code]}
-                onChange={(value) => updateAnswer(question.code, value)}
-                onAutoAdvance={(code, value) => {
-                  setSubmitMessage("");
-                  setCurrentIndex((index) => nextVisibleQuestionIndex(index, { ...answers, [code]: value }));
-                }}
-                onJumpToQuestion={(code) => {
-                  const targetIndex = surveyQuestions.findIndex((item) => item.code === code);
-                  if (targetIndex >= 0) {
-                    setSubmitMessage("");
-                    setCurrentIndex(targetIndex);
-                  }
-                }}
-                shouldAutoAdvance={shouldAutoAdvanceQuestion(question)}
-              />
-            )
+            <>
+              {/* <div className="survey-question-meta">
+                <span>{sectionLabels[question.section]}</span>
+                {question.section !== "pii" && <strong>{question.code}</strong>}
+              </div> */}
+              {question.code === "P2-EXCLUDE" ? (
+                <ContactVerificationPage
+                  entryMode={entryMode}
+                  offlineEntryId={offlineEntryId}
+                  phoneValue={String(answers["P2-EXCLUDE"] ?? "")}
+                  consentValue={String(answers["P1-EXCLUDE"] ?? "")}
+                  onOfflineEntryIdChange={setOfflineEntryId}
+                  onPhoneChange={(value) => updateAnswer("P2-EXCLUDE", value)}
+                  onConsentChange={handleContactConsentChange}
+                />
+              ) : (
+                isRq1Question(question) ? (
+                  <Rq1QuestionGroup
+                    questions={pageQuestions}
+                    answers={answers}
+                    onChange={updateAnswer}
+                    onBatchChange={updateAnswers}
+                  />
+                ) : (
+                  <QuestionField
+                    question={question}
+                    value={answers[question.code]}
+                    onChange={(value) => updateAnswer(question.code, value)}
+                    onAutoAdvance={(code, value) => {
+                      setSubmitMessage("");
+                      const nextAnswers = { ...answers, [code]: value };
+                      setCurrentIndex((index) => nextVisibleQuestionIndex(index, nextAnswers));
+                    }}
+                    onJumpToQuestion={(code) => {
+                      const targetIndex = surveyQuestions.findIndex((item) => item.code === code);
+                      if (targetIndex >= 0) {
+                        setSubmitMessage("");
+                        setCurrentIndex(targetIndex);
+                      }
+                    }}
+                    shouldAutoAdvance={shouldAutoAdvanceQuestion(question)}
+                  />
+                )
+              )}
+              <div className="survey-controls">
+                {currentIndex > 0 && (
+                  <button className="survey-secondary-button" type="button" onClick={goPrevious} disabled={isSubmitting}>
+                    <ChevronLeft size={18} />
+                    이전
+                  </button>
+                )}
+                {currentIndex === surveyQuestions.length - 1 ? (
+                  <button className="survey-primary-button" type="button" onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? "제출 중" : "제출"}
+                    <Check size={18} />
+                  </button>
+                ) : (
+                  <button className="survey-primary-button" type="button" onClick={goNext} disabled={isSubmitting}>
+                    다음
+                    <ChevronRight size={18} />
+                  </button>
+                )}
+              </div>
+              {submitMessage && <div className="survey-submit-message" role="status">{submitMessage}</div>}
+            </>
           )}
-          <div className="survey-controls">
-            {currentIndex > 0 && (
-              <button className="survey-secondary-button" type="button" onClick={goPrevious}>
-                <ChevronLeft size={18} />
-                이전
-              </button>
-            )}
-            {currentIndex === surveyQuestions.length - 1 ? (
-              <button className="survey-primary-button" type="button" onClick={handleSubmit} disabled={isSubmitting}>
-                {isSubmitting ? "제출 중" : "제출"}
-                <Check size={18} />
-              </button>
-            ) : (
-              <button className="survey-primary-button" type="button" onClick={goNext}>
-                다음
-                <ChevronRight size={18} />
-              </button>
-            )}
-          </div>
-          {submitMessage && <div className="survey-submit-message" role="status">{submitMessage}</div>}
         </section>
 
         {showDebugExport && (
@@ -460,6 +504,21 @@ export function SurveyPrototype({ onExportSnapshotChange, showModeLink = false }
         </div>
       </footer>
     </main>
+  );
+}
+
+function SubmissionCompletePage() {
+  return (
+    <section className="survey-completion-card" role="status" aria-live="polite">
+      <span className="survey-completion-icon">
+        <Check size={26} />
+      </span>
+      <p className="question-type-badge">제출 완료</p>
+      <h2>응답 제출이 완료되었습니다</h2>
+      <p>
+        참여해 주셔서 감사합니다. 제출 처리 완료 후에는 같은 화면에서 다시 제출할 수 없습니다.
+      </p>
+    </section>
   );
 }
 
@@ -495,12 +554,12 @@ function QuestionField({
   return (
     <div className={`survey-question ${question.type === "multi_choice" ? "multi-choice-page" : ""} ${isScaleQuestion(question) ? "scale-question" : ""}`}>
       <div className="survey-question-title">
-        {iconForQuestion(question)}
-        <div>
-          <h2>{renderQuestionTitle(question)}</h2>
-          {question.description && <p>{question.description}</p>}
+          {iconForQuestion(question)}
+          <div>
+            <QuestionHeading question={question} />
+          <QuestionDescription question={question} />
+          </div>
         </div>
-      </div>
       {question.type === "single_choice" && <ChoiceButtons question={question} value={String(value ?? "")} onChange={handleSingleChoiceChange} />}
       {question.type === "district_dong" && <DistrictDongInput question={question} value={isDistrictDongValue(value) ? value : { district: "", dong: "" }} onChange={onChange} />}
       {question.type === "multi_choice" && <MultiChoiceButtons question={question} value={Array.isArray(value) ? value : []} onChange={onChange} />}
@@ -525,34 +584,105 @@ function QuestionField({
   );
 }
 
+function QuestionHeading({ question }: { question: SurveyQuestion }) {
+  const badgeLabel = questionTypeBadgeLabel(question);
+  return (
+    <div className="question-heading-row">
+      <h2>{renderQuestionTitle(question)}</h2>
+      {badgeLabel && <span className="question-type-badge">{badgeLabel}</span>}
+    </div>
+  );
+}
+
+function QuestionDescription({ question }: { question: SurveyQuestion }) {
+  const description = questionDescriptionText(question);
+  return <p className={description ? "" : "question-description-placeholder"}>{description || "\u00a0"}</p>;
+}
+
+function questionDescriptionText(question: SurveyQuestion) {
+  const details: string[] = [];
+  if (question.description) details.push(question.description);
+  if (isScaleQuestionWithoutNa(question)) details.push("해당없음 선택지가 없는 문항입니다.");
+  return details.join(" ");
+}
+
+function isScaleQuestionWithoutNa(question: SurveyQuestion) {
+  return question.type === "likert_7" || question.type === "semantic_7";
+}
+
+function questionTypeBadgeLabel(question: SurveyQuestion) {
+  if (question.type === "single_choice") return "1개 선택";
+  if (question.type === "multi_choice") return "복수 선택 가능";
+  if (question.type === "likert_7" || question.type === "likert_7_with_na" || question.type === "semantic_7") return "척도 선택";
+  if (question.type === "numeric") return "숫자 입력";
+  if (question.type === "period") return "기간 입력";
+  if (question.type === "rank_choice") return `${question.rankCount ?? 3}순위 선택`;
+  if (question.type === "district_dong") return "지역 선택";
+  if (question.type === "long_text" || question.type === "short_text") return "선택 입력";
+  return "";
+}
+
 function ContactVerificationPage({
+  entryMode,
+  offlineEntryId,
   phoneValue,
   consentValue,
+  onOfflineEntryIdChange,
   onPhoneChange,
   onConsentChange,
 }: {
+  entryMode: "online" | "offline_entry";
+  offlineEntryId: string;
   phoneValue: string;
   consentValue: string;
+  onOfflineEntryIdChange: (value: string) => void;
   onPhoneChange: (value: string) => void;
   onConsentChange: (value: string) => void;
 }) {
   const consentQuestion = localSurveyQuestions.find((question) => question.code === "P1-EXCLUDE");
   const [privacyExpanded, setPrivacyExpanded] = React.useState(false);
   const showPhoneInput = consentValue === phoneConsentValue;
+  const isOfflineEntry = entryMode === "offline_entry";
 
   return (
     <div className="survey-question contact-page">
+      {isOfflineEntry && (
+        <div className="offline-entry-banner">
+          <strong>오프라인 설문 입력 모드</strong>
+          <span>종이 설문지 응답을 담당자가 그대로 입력하는 화면입니다. 제출 로그에는 `source=offline_entry`로 기록됩니다.</span>
+          <label className="offline-entry-id-field">
+            <span>종이 설문 관리번호</span>
+            <input
+              autoComplete="off"
+              inputMode="text"
+              maxLength={32}
+              placeholder="예: OFF-0001"
+              value={offlineEntryId}
+              onChange={(event) => onOfflineEntryIdChange(formatOfflineEntryId(event.target.value))}
+            />
+            <small>선택 입력입니다. 입력하면 제출 로그에만 기록됩니다.</small>
+          </label>
+        </div>
+      )}
       <div className="contact-start-panel">
         <div className="contact-start-copy">
           <span>{surveyTitle}</span>
-          <h2>잠깐의 확인 후 설문을 시작합니다</h2>
-          <p>응답은 분석용으로 분리 저장되며, 전화번호 제공에 동의하지 않아도 설문에는 참여할 수 있습니다.</p>
+          <h2>{isOfflineEntry ? "종이 설문 응답을 입력합니다" : "도서관 서비스 발전을 위한 의견을 들려주세요"}</h2>
+          {isOfflineEntry ? (
+            <p>응답자가 표시한 그대로 입력하고, 빈칸이나 읽기 어려운 응답은 임의로 보정하지 않습니다.</p>
+          ) : (
+            <p>
+              노원구립도서관 이용 경험과 서비스 혜택을 살펴보고 향후 발전 방향을 모색하기 위한 조사입니다.
+              <br />
+              전체 응답에는 약 <strong>7분</strong>이 소요됩니다.
+            </p>
+          )}
         </div>
         <div className="contact-start-steps" aria-label="설문 진행 안내">
           <strong>1</strong>
-          <span>중복 제출 확인</span>
+          <span>{isOfflineEntry ? "종이 설문 확인" : "중복 제출 확인"}</span>
           <strong>2</strong>
-          <span>설문 응답</span>
+          <span>{isOfflineEntry ? "응답 그대로 입력" : "설문 응답"}</span>
           <strong>3</strong>
           <span>제출 완료</span>
         </div>
@@ -565,7 +695,7 @@ function ContactVerificationPage({
             <Phone size={22} />
             <div>
               <h2><strong className="question-keyword">연락처 제공 여부</strong>를 선택해 주세요</h2>
-              <p>동의하면 전화번호 기준으로 중복 제출을 확인하고, 동의하지 않으면 바로 설문으로 이동합니다.</p>
+              <p>{isOfflineEntry ? "종이 설문지에 표시된 연락처 제공 여부만 입력합니다. 표시가 없거나 불명확하면 동의하지 않음으로 처리하고 검수 대상에 남겨 주세요." : "동의하면 전화번호 기준으로 중복 제출을 확인하고, 동의하지 않으면 바로 설문으로 이동합니다."}</p>
             </div>
           </div>
           <ChoiceButtons question={consentQuestion} value={consentValue} onChange={onConsentChange} />
@@ -585,16 +715,27 @@ function ContactVerificationPage({
           aria-expanded={privacyExpanded}
           onClick={() => setPrivacyExpanded((expanded) => !expanded)}
         >
-          <strong>개인정보 취급 안내</strong>
+          <strong>개인정보 수집·이용 안내</strong>
           <ChevronsUpDown size={15} />
         </button>
         {privacyExpanded && (
-          <p>
-            수집한 휴대폰 번호는 본인 확인, 중복 제출 방지, 답례 발송 등 조사 운영 목적에만 사용합니다.
-            분석용 export 파일에는 포함하지 않으며, 통계 분석에는 개인을 식별할 수 없는 응답 데이터만 사용합니다.
-            동의하지 않는 경우 전화번호는 수집하지 않고, 같은 브라우저의 제출 완료 정보만 이용해 반복 제출을 제한합니다.
-            개인정보는 접근 권한이 제한된 운영 영역에 분리 보관하고, 조사 운영 목적 달성 후 내부 보관 기준에 따라 파기합니다.
-          </p>
+          <div className="privacy-policy-content">
+            <p>
+              본 조사의 응답 내용은 공공도서관 서비스 개선을 위한 통계 분석 목적으로만 사용됩니다. 응답 자료는 개인을 식별할 수 없도록 분석용 응답과 연락처 정보를 분리하여 처리하며, 연락처 제공에 동의한 경우에도 전화번호 원문은 저장하지 않고 해시 및 암호화 값으로 보호합니다. 분석용 자료에는 연락처 정보가 포함되지 않습니다.
+            </p>
+            <ul>
+              <li>수집·이용 목적: 중복 제출 확인, 답례 발송, 조사 운영 관리</li>
+              <li>수집 항목: 휴대폰 번호</li>
+              <li>보유·이용 기간: 조사 종료 후 답례품 지급 후 파기</li>
+              <li>동의 거부권 및 불이익: 동의하지 않아도 설문 참여는 가능하지만 전화번호 기반 중복 확인과 답례 발송은 제공되지 않습니다.</li>
+              {/*
+              <li>전화번호 원문은 저장하지 않고 서버에서 해시와 암호화 값으로 분리 저장합니다.</li>
+              <li>분석용 export 파일에는 휴대폰 번호, 해시, 암호화 값을 포함하지 않습니다.</li>
+              <li>반복 또는 이상 응답 여부는 제출 로그를 기준으로 사후 검토합니다.</li>
+              <li>개인정보는 접근 권한이 제한된 운영 영역에 보관하고, 조사 운영 목적 달성 후 내부 보관 기준에 따라 파기합니다.</li>
+              */}
+            </ul>
+          </div>
         )}
       </div>
     </div>
@@ -633,7 +774,10 @@ function Rq1QuestionGroup({
       <div className="survey-question-title">
         <Hash size={22} />
         <div>
-          <h2><strong className="question-keyword">지난 1년 동안 읽은 독서량</strong></h2>
+          <div className="question-heading-row">
+            <h2><strong className="question-keyword">지난 1년 동안 읽은 독서량</strong></h2>
+            <span className="question-type-badge">숫자 입력</span>
+          </div>
           <p>유형별 권수를 한 번에 입력해 주세요.</p>
         </div>
       </div>
@@ -1126,12 +1270,18 @@ type SubmitSurveyRequest = {
   piiPayload: Record<string, unknown>;
   completedFields: number;
   totalFields: number;
+  responseDurationMs?: number;
+  responseSource?: "online" | "offline_entry";
+  offlineEntryId?: string;
 };
 
 type SubmitSurveyResult = {
   ok: boolean;
   duplicate?: boolean;
+  code?: string;
   message?: string;
+  requestId?: string;
+  status?: number;
 };
 
 async function submitSurveyResponse(payload: SubmitSurveyRequest): Promise<SubmitSurveyResult> {
@@ -1150,16 +1300,20 @@ async function submitSurveyResponse(payload: SubmitSurveyRequest): Promise<Submi
   return {
     ok: response.ok && result.ok !== false,
     duplicate: Boolean(result.duplicate),
+    code: typeof result.code === "string" ? result.code : "",
     message: typeof result.message === "string" ? result.message : "",
+    requestId: typeof result.requestId === "string" ? result.requestId : "",
+    status: response.status,
   };
 }
 
 function buildAnalysisPayload(answers: Record<string, SurveyValue>) {
   const payload: Record<string, unknown> = {};
+  const exportAnswers = normalizeConditionalAnswersForExport(answers);
   localSurveyQuestions
     .filter((question) => !question.pii)
     .forEach((question) => {
-      const value = answers[question.code];
+      const value = exportAnswers[question.code];
       if (question.type === "period" && isPeriodValue(value)) {
         const [yearCode = `${question.code}-Y`, monthCode = `${question.code}-M`] = question.exportCodes ?? [];
         payload[yearCode] = value.years;
@@ -1167,8 +1321,9 @@ function buildAnalysisPayload(answers: Record<string, SurveyValue>) {
         return;
       }
       if (question.type === "district_dong" && isDistrictDongValue(value)) {
-        payload[question.code] = value.district;
-        payload[`${question.code}-DONG`] = value.dong;
+        const normalizedValue = normalizedDistrictDongValue(question, value);
+        payload[question.code] = normalizedValue.district;
+        payload[`${question.code}-DONG`] = normalizedValue.dong;
         return;
       }
       if (question.type === "rank_choice" && isRankValue(value)) {
@@ -1202,12 +1357,44 @@ function buildPiiPayload(answers: Record<string, SurveyValue>) {
   return payload;
 }
 
+function normalizeConditionalAnswersForExport(answers: Record<string, SurveyValue>) {
+  const nextAnswers = { ...answers };
+  const rq1NumericQuestions = surveyQuestions.filter((item) => isRq1Question(item) && item.type === "numeric");
+  const hasPositiveReadingCount = rq1NumericQuestions.some((item) => Number(nextAnswers[item.code] ?? 0) > 0);
+  const noReadingValue = String(nextAnswers["RQ1-7"] ?? "").trim();
+
+  if (hasPositiveReadingCount && noReadingValue) {
+    nextAnswers["RQ1-7"] = "";
+  } else if (noReadingValue) {
+    rq1NumericQuestions.forEach((item) => {
+      nextAnswers[item.code] = "0";
+    });
+  }
+
+  return nextAnswers;
+}
+
+function normalizedDistrictDongValue(question: SurveyQuestion, value: DistrictDongValue): DistrictDongValue {
+  if (!value.district) {
+    return { district: "", dong: "" };
+  }
+  if (value.district === "기타") {
+    // SQ3-DONG is kept as a sentinel export value because the submission schema has a fixed district/dong column pair.
+    return { district: value.district, dong: "기타" };
+  }
+  const allowedDongs = question.dongChoicesByDistrict?.[value.district] ?? [];
+  return {
+    district: value.district,
+    dong: allowedDongs.includes(value.dong) ? value.dong : "",
+  };
+}
+
 function buildExportCompletion(answers: Record<string, SurveyValue>) {
   return localSurveyQuestions
     .filter((question) => !question.pii && !question.completionExcluded)
     .reduce(
       (summary, question) => {
-        const stats = exportStatsForQuestion(question, answers[question.code]);
+        const stats = progressStatsForQuestion(question, answers);
         return {
           completedFields: summary.completedFields + stats.completedFields,
           totalFields: summary.totalFields + stats.totalFields,
@@ -1233,7 +1420,7 @@ function buildProgressGroupCompletion(groupId: string, answers: Record<string, S
     .filter((item) => progressGroupIdForQuestion(item) === groupId)
     .reduce(
       (summary, item) => {
-        const stats = item.pii ? questionStatsForNavigation(item, answers[item.code]) : exportStatsForQuestion(item, answers[item.code]);
+        const stats = item.pii ? questionStatsForNavigation(item, answers[item.code]) : progressStatsForQuestion(item, answers);
         return {
           completedFields: summary.completedFields + stats.completedFields,
           totalFields: summary.totalFields + stats.totalFields,
@@ -1252,7 +1439,7 @@ function findFirstIncompleteProgressGroupQuestionIndex(groupId: string, answers:
   }
   return surveyQuestions.findIndex((item) => {
     if (progressGroupIdForQuestion(item) !== groupId) return false;
-    const stats = item.pii ? questionStatsForNavigation(item, answers[item.code]) : exportStatsForQuestion(item, answers[item.code]);
+    const stats = item.pii ? questionStatsForNavigation(item, answers[item.code]) : progressStatsForQuestion(item, answers);
     return stats.completedFields < stats.totalFields;
   });
 }
@@ -1271,7 +1458,8 @@ function exportStatsForQuestion(question: SurveyQuestion, value: SurveyValue) {
   }
   if (question.type === "district_dong") {
     const districtDong = isDistrictDongValue(value) ? value : { district: "", dong: "" };
-    return countFilledFields([districtDong.district, districtDong.dong]);
+    const normalizedValue = normalizedDistrictDongValue(question, districtDong);
+    return countFilledFields([normalizedValue.district, normalizedValue.dong]);
   }
   if (question.type === "rank_choice") {
     const rankValue = isRankValue(value) ? value : {};
@@ -1282,6 +1470,13 @@ function exportStatsForQuestion(question: SurveyQuestion, value: SurveyValue) {
     return { completedFields: Array.isArray(value) && value.length > 0 ? 1 : 0, totalFields: 1 };
   }
   return { completedFields: isFilledExportValue(value) ? 1 : 0, totalFields: 1 };
+}
+
+function progressStatsForQuestion(question: SurveyQuestion, answers: Record<string, SurveyValue>) {
+  if (question.code === "RQ1-7" && rq1NumericQuestionsHaveAnyAnswer(answers)) {
+    return { completedFields: 0, totalFields: 0 };
+  }
+  return exportStatsForQuestion(question, answers[question.code]);
 }
 
 function countFilledFields(values: SurveyValue[]) {
@@ -1423,6 +1618,53 @@ function fillEmptyDirectInputsOnPage(questions: SurveyQuestion[], answers: Recor
   return nextAnswers ?? answers;
 }
 
+function fillEmptyDirectInputsAcrossSurvey(answers: Record<string, SurveyValue>) {
+  return surveyQuestions.reduce((currentAnswers, item) => fillEmptyDirectInputsOnPage(questionsForPage(item), currentAnswers), answers);
+}
+
+function requiredWarningForQuestions(questions: SurveyQuestion[], answers: Record<string, SurveyValue>) {
+  const missingQuestion = questions.find((item) => isRequiredQuestionIncomplete(item, answers));
+  if (!missingQuestion) return "";
+  if (missingQuestion.type === "rank_choice") {
+    return `${missingQuestion.title}: 순위 선택을 완료해 주세요.`;
+  }
+  if (missingQuestion.type === "multi_choice") {
+    return `${missingQuestion.title}: 하나 이상 선택해 주세요.`;
+  }
+  if (missingQuestion.type === "district_dong") {
+    return `${missingQuestion.title}: 자치구와 행정동을 선택해 주세요.`;
+  }
+  if (missingQuestion.type === "period") {
+    return `${missingQuestion.title}: 년 또는 개월을 입력해 주세요.`;
+  }
+  return `${missingQuestion.title}: 응답을 선택하거나 입력해 주세요.`;
+}
+
+function findFirstInvalidRequiredQuestionIndex(answers: Record<string, SurveyValue>) {
+  return surveyQuestions.findIndex((item) => isRequiredQuestionIncomplete(item, answers));
+}
+
+function isRequiredQuestionIncomplete(question: SurveyQuestion, answers: Record<string, SurveyValue>) {
+  if (!question.required) return false;
+  if (question.code === "RQ1-7") {
+    return !hasAnswer(answers["RQ1-7"]) && !rq1NumericQuestionsHaveAnyAnswer(answers);
+  }
+  if (isRq1Question(question) && question.type === "numeric" && hasAnswer(answers["RQ1-7"])) {
+    return false;
+  }
+  if (question.type === "rank_choice" || question.type === "period" || question.type === "district_dong") {
+    const stats = exportStatsForQuestion(question, answers[question.code]);
+    return stats.completedFields < stats.totalFields;
+  }
+  return !hasAnswer(answers[question.code]);
+}
+
+function rq1NumericQuestionsHaveAnyAnswer(answers: Record<string, SurveyValue>) {
+  return surveyQuestions
+    .filter((item) => isRq1Question(item) && item.type === "numeric")
+    .some((item) => hasAnswer(answers[item.code]));
+}
+
 function isRq1Question(question: SurveyQuestion | undefined) {
   return Boolean(question && rq1QuestionCodes.has(question.code));
 }
@@ -1478,6 +1720,29 @@ function rangeWarningForQuestions(questions: SurveyQuestion[], answers: Record<s
   return "";
 }
 
+function submissionFailureMessage(response: SubmitSurveyResult) {
+  const contactCode = response.requestId ? ` 문의 코드: ${response.requestId}` : "";
+  if (response.duplicate || response.code === "ERR_PII_DUPLICATE") {
+    return `이미 제출이 완료된 휴대폰 번호입니다. 같은 번호로는 다시 제출할 수 없습니다.${contactCode}`;
+  }
+  if (response.code === "ERR_SERVICE_MAINTENANCE") {
+    return `현재 설문 저장 서버 점검 중입니다. 잠시 후 다시 시도해 주세요.${contactCode}`;
+  }
+  if (response.code === "ERR_SUBMISSION_BLOCKED") {
+    return `현재 제출이 일시 차단되어 있습니다. 차단이 해제되기 전에는 다시 시도해도 제출되지 않습니다.${contactCode}`;
+  }
+  if (response.code === "ERR_STORAGE_NOT_CONFIGURED" || response.status === 503) {
+    return `제출 저장소 설정을 확인해야 합니다. 다시 시도해도 해결되지 않을 수 있으니 운영 담당자에게 문의해 주세요.${contactCode}`;
+  }
+  if (response.code === "ERR_PII_WRITE_FAILED" || response.code === "ERR_ANALYSIS_WRITE_FAILED") {
+    return `응답 저장 중 오류가 발생했습니다. 잠시 후 다시 시도하고, 계속 실패하면 운영 담당자에게 문의해 주세요.${contactCode}`;
+  }
+  if (response.status && response.status >= 500) {
+    return `서버 오류로 제출하지 못했습니다. 잠시 후 다시 시도하고, 계속 실패하면 운영 담당자에게 문의해 주세요.${contactCode}`;
+  }
+  return `${response.message || "입력값을 확인해 주세요."}${contactCode}`;
+}
+
 function sectionSortIndex(section: string) {
   const order = ["pii", "respondent", "satisfaction", "behavior", "reading", "local_feedback", "intro"];
   const index = order.indexOf(section);
@@ -1520,6 +1785,10 @@ function normalizedPhone(value: SurveyValue) {
   return String(value ?? "").replace(/[^\d]/g, "");
 }
 
+function formatOfflineEntryId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32).toUpperCase();
+}
+
 function isValidPhone(value: SurveyValue) {
   return normalizedPhone(value).length === 11 && !isSamplePhone(value);
 }
@@ -1546,18 +1815,6 @@ function saveSubmittedPhone(phone: string) {
   const phones = new Set(submittedPhones());
   phones.add(phone);
   window.localStorage.setItem(submittedPhoneStorageKey, JSON.stringify([...phones]));
-}
-
-function hasSubmittedAnonymous() {
-  try {
-    return window.localStorage.getItem(submittedAnonymousStorageKey) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function saveSubmittedAnonymous() {
-  window.localStorage.setItem(submittedAnonymousStorageKey, "1");
 }
 
 function hasPhoneConsent(answers: Record<string, SurveyValue>) {

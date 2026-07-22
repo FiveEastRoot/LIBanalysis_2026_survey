@@ -270,7 +270,15 @@
 }
 
 .scale-question .survey-question-title {
-  min-height: 104px;
+  min-height: 136px;
+}
+
+.scale-question .survey-question-title h2 {
+  min-height: calc(1.32em * 3);
+}
+
+.scale-question .survey-question-title p {
+  min-height: calc(1.45em * 2);
 }
 
 .survey-question-title > svg {
@@ -278,11 +286,32 @@
   color: #10367D;
 }
 
+.question-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .survey-question h2 {
   margin: 0;
   color: #1B262C;
   font-size: 24px;
   line-height: 1.32;
+}
+
+.question-type-badge {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  padding: 4px 7px;
+  color: #10367D;
+  border: 1px solid #BBE1FA;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .question-keyword {
@@ -307,6 +336,10 @@
   margin: 7px 0 0;
   color: #0F4C75;
   font-size: 14px;
+}
+
+.question-description-placeholder {
+  visibility: hidden;
 }
 
 .choice-grid {
@@ -590,6 +623,64 @@
   gap: 18px;
 }
 
+.offline-entry-banner {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  color: #2940D3;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.offline-entry-banner strong {
+  color: #1B262C;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.offline-entry-banner span {
+  color: #2940D3;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.offline-entry-id-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.offline-entry-id-field span {
+  color: #10367D;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.offline-entry-id-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  color: #1B262C;
+  border: 1px solid #BBE1FA;
+  border-radius: 8px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 15px;
+}
+
+.offline-entry-id-field input:focus {
+  outline: 3px solid #BBE1FA;
+  border-color: #587FFF;
+}
+
+.offline-entry-id-field small {
+  color: #0F4C75;
+  font-size: 11px;
+}
+
 .contact-start-panel {
   position: relative;
   display: grid;
@@ -626,6 +717,11 @@
   color: #F8F7F4;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.contact-start-copy p strong {
+  color: #ffffff;
+  font-weight: 950;
 }
 
 .contact-start-steps {
@@ -726,7 +822,31 @@
   color: #587FFF;
 }
 
-.privacy-policy-note p {
+.privacy-policy-content {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  color: #587FFF;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.privacy-policy-content p {
+  margin: 0;
+}
+
+.privacy-policy-content ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.privacy-policy-content li {
+  margin: 0;
+}
+
+.privacy-policy-note > p {
   margin: 8px 0 0;
   color: #587FFF;
   font-size: 11px;
@@ -752,6 +872,43 @@
   font-size: 13px;
   font-weight: 750;
   line-height: 1.45;
+}
+
+.survey-completion-card {
+  display: flex;
+  min-height: 420px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 42px 18px;
+  text-align: center;
+}
+
+.survey-completion-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  color: #ffffff;
+  border-radius: 999px;
+  background: #172A9C;
+}
+
+.survey-completion-card h2 {
+  margin: 0;
+  color: #1B262C;
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.survey-completion-card p {
+  max-width: 360px;
+  margin: 0;
+  color: #33536B;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .survey-primary-button,
@@ -904,11 +1061,21 @@
   }
 
   .scale-question .survey-question-title {
-    min-height: 118px;
+    min-height: 142px;
   }
 
   .survey-question h2 {
     font-size: 20px;
+  }
+
+  .question-heading-row {
+    display: grid;
+    gap: 7px;
+  }
+
+  .question-type-badge {
+    width: fit-content;
+    margin-top: 0;
   }
 
   .survey-section-list,
@@ -935,5 +1102,10 @@
   .survey-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .survey-primary-button,
+  .survey-secondary-button {
+    min-height: 46px;
   }
 }

@@ -171,8 +171,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
       "화랑도서관",
       "월계도서관",
       "월계어린이도서관",
-      "하계어린이도서관",
-      "해당없음"
+      "하계어린이도서관"
     ],
     // "description": "현재 노원구 조사폼 기준 도서관 목록입니다. 타 자치구 배포 시 목록만 교체합니다."
   },
@@ -816,7 +815,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "title": "자주 이용하지 않는 경우 연간 도서관 이용 횟수",
     "required": true,
     "min": 0,
-    "max": 365,
+    "max": 348,
     "unit": "회/년"
   },
   {
@@ -826,7 +825,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "title": "2026년 기준 도서관 월 평균 이용 횟수",
     "required": true,
     "min": 0,
-    "max": 31,
+    "max": 29,
     "unit": "회/월"
   },
   {
@@ -843,7 +842,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "type": "period",
     "title": "모든 도서관 기준 도서관 이용 기간",
     "description": "년과 개월을 나누어 입력합니다. 예: 3년 6개월",
-    "required": false
+    "required": true
   },
   {
     "code": "DQ3",
@@ -914,7 +913,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
       "기타"
     ],
     "rankCount": 3,
-    "required": false
+    "required": true
   },
   {
     "code": "DQ6-Y",
@@ -923,7 +922,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "title": "자주 이용하지 않는 경우 연간 대출 서비스 이용 횟수",
     "required": true,
     "min": 0,
-    "max": 365,
+    "max": 348,
     "unit": "회/년"
   },
   {
@@ -933,7 +932,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "title": "2026년 기준 도서관 대출 서비스 월 평균 이용 횟수",
     "required": true,
     "min": 0,
-    "max": 31,
+    "max": 29,
     "unit": "회/월"
   },
   {
@@ -1144,7 +1143,7 @@ export const localSurveyQuestions: SurveyQuestion[] = [
       "세상 이해와 통찰력 향상"
     ],
     "rankCount": 3,
-    "required": false
+    "required": true
   },
   {
     "code": "NW-OE-1",
@@ -1159,10 +1158,10 @@ export const localSurveyQuestions: SurveyQuestion[] = [
     "code": "P1-EXCLUDE",
     "section": "pii",
     "type": "single_choice",
-    "title": "경품 발송을 위한 개인정보 제3자 제공 동의 여부",
+    "title": "경품 발송을 위한 개인정보 수집·이용 동의 여부",
     "required": false,
     "choices": [
-      "취급위탁에 동의",
+      "개인정보 수집·이용 동의",
       "동의하지 않음(경품지급불가)"
     ],
     "pii": true
